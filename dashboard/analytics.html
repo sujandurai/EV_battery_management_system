@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EV Guardian — Telemetry Waveforms</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="common.css"/>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside class="hud-sidebar">
+    <div>
+      <div class="nav-brand">⚡ Guardian</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-item"><span class="icon">🌐</span> twin cockpit</a>
+        <a href="analytics.html" class="nav-item active"><span class="icon">📈</span> waveforms</a>
+        <a href="models.html" class="nav-item"><span class="icon">🧠</span> ai engine</a>
+        <a href="copilot.html" class="nav-item"><span class="icon">🤖</span> ai copilot</a>
+      </nav>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-status">
+        <span class="pill-dot"></span> System Live
+      </div>
+    </div>
+  </aside>
+
+  <!-- Content Wrapper -->
+  <div class="hud-content">
+    <header>
+      <div class="logo-container">
+        <div class="logo-glow-icon">📈</div>
+        <div class="logo-titles">
+          <h1>Telemetry Waveforms</h1>
+          <p>Qualcomm Snapdragon PC Edge Platform &middot; Real-time Digital Oscilloscopes</p>
+        </div>
+      </div>
+      
+      <div class="status-capsules">
+        <div class="hud-pill live" id="connection-pill">
+          <div class="dot"></div>
+          <span id="connection-txt">Telemetry Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CRITICAL ALERT STRIP -->
+    <div id="alert-strip">
+      <div class="alert-icon-ring">!</div>
+      <div class="alert-details">
+        <h4 id="alert-strip-head">CRITICAL FAULT DETECTED</h4>
+        <p id="alert-strip-reason">CELL_3_VOLT_LOW(1.25V) — Local model inference flags fault</p>
+      </div>
+      <button id="diag-trigger" onclick="location.href='copilot.html'">🤖 Diagnose</button>
+    </div>
+
+    <!-- MAIN VIEWPORT GRID -->
+    <main>
+      <div class="full-page-layout">
+        
+        <!-- Oscilloscope Waveform Panels -->
+        <div class="glass-card">
+          <div class="panel-tag-header">
+            <div class="panel-title">Realtime Waveform Oscilloscope Suite</div>
+            <div class="panel-meta">10Hz Telemetry Ingestion Data Stream</div>
+          </div>
+          
+          <div class="four-chart-grid" style="grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 20px;">
+            
+            <!-- Voltage Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: var(--neon-cyan)">Battery Cell Voltages (V)</label>
+                <span id="txt-val-volt">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-voltages" style="flex: 1; height: 100%;"></canvas>
+            </div>
+            
+            <!-- Thermal Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: var(--neon-orange)">Thermal Sensors (°C)</label>
+                <span id="txt-val-temp">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-temperatures" style="flex: 1; height: 100%;"></canvas>
+            </div>
+            
+            <!-- Pack Current Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: var(--neon-blue)">Pack Telemetry Current (A)</label>
+                <span id="txt-val-current">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-current" style="flex: 1; height: 100%;"></canvas>
+            </div>
+            
+            <!-- pack SOH trend Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: var(--neon-green)">State of Health (SOH %)</label>
+                <span id="txt-val-soh">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-soh" style="flex: 1; height: 100%;"></canvas>
+            </div>
+
+            <!-- Vibration Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: #c084fc">Vibration Waveform (g)</label>
+                <span id="txt-val-vibration">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-vibration" style="flex: 1; height: 100%;"></canvas>
+            </div>
+
+            <!-- Gas PPM Oscilloscope -->
+            <div class="chart-container-card" style="height: 180px; display: flex; flex-direction: column;">
+              <div class="chart-header">
+                <label style="color: #fb7185">Environmental Gas (ppm)</label>
+                <span id="txt-val-gas">—</span>
+              </div>
+              <canvas class="sparkline-canvas" id="canvas-gas" style="flex: 1; height: 100%;"></canvas>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <footer>
+      <div>EV GUARDIAN HUD v5.0</div>
+      <div class="tech-stack-row">
+        <span class="stack-badge">Snapdragon X PC</span>
+        <span class="stack-badge">HTML5 Canvas</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Helper function
+    const $$ = id => document.getElementById(id);
+
+    // Configuration
+    const WS_URL = "ws://localhost:8887/";
+    let ws = null;
+    let reconnectTimer = null;
+    let lastFaultReason = "";
+
+    // Array History Length for chart drawing
+    const HISTORY_LEN = 110;
+    const telemetryHistory = {
+      v1: Array(HISTORY_LEN).fill(3.82),
+      v2: Array(HISTORY_LEN).fill(3.81),
+      v3: Array(HISTORY_LEN).fill(3.80),
+      v4: Array(HISTORY_LEN).fill(3.83),
+      t1: Array(HISTORY_LEN).fill(34.1),
+      t2: Array(HISTORY_LEN).fill(34.3),
+      t3: Array(HISTORY_LEN).fill(34.2),
+      t4: Array(HISTORY_LEN).fill(34.4),
+      current: Array(HISTORY_LEN).fill(-1.6),
+      soh: Array(HISTORY_LEN).fill(94.2),
+      vibration: Array(HISTORY_LEN).fill(0.03),
+      gas: Array(HISTORY_LEN).fill(5.0)
+    };
+
+    function pushTelemetryPoint(array, item) {
+      array.push(item);
+      if (array.length > HISTORY_LEN) array.shift();
+    }
+
+    /* ── Canvas sparkline oscillators ── */
+    function renderWaveformCharts() {
+      // 1. Voltages
+      drawSparkline('canvas-voltages', [
+        { data: telemetryHistory.v1, color: 'rgba(0, 240, 255, 0.85)' },
+        { data: telemetryHistory.v2, color: 'rgba(59, 130, 246, 0.7)' },
+        { data: telemetryHistory.v3, color: 'rgba(255, 51, 102, 0.85)' },
+        { data: telemetryHistory.v4, color: 'rgba(156, 163, 175, 0.6)' }
+      ], 3.0, 4.3);
+
+      // 2. Temperatures
+      drawSparkline('canvas-temperatures', [
+        { data: telemetryHistory.t1, color: 'rgba(59, 130, 246, 0.4)' },
+        { data: telemetryHistory.t2, color: 'rgba(59, 130, 246, 0.4)' },
+        { data: telemetryHistory.t3, color: 'rgba(255, 157, 0, 0.95)' },
+        { data: telemetryHistory.t4, color: 'rgba(59, 130, 246, 0.4)' }
+      ], 15.0, 125.0);
+
+      // 3. Pack Current
+      drawSparkline('canvas-current', [
+        { data: telemetryHistory.current, color: 'rgba(59, 130, 246, 0.9)' }
+      ], -15.0, 2.0);
+
+      // 4. State of Health
+      drawSparkline('canvas-soh', [
+        { data: telemetryHistory.soh, color: 'rgba(0, 255, 135, 0.9)' }
+      ], 0.0, 100.0);
+
+      // 5. Vibration
+      drawSparkline('canvas-vibration', [
+        { data: telemetryHistory.vibration, color: 'rgba(192, 132, 252, 0.9)' }
+      ], 0.0, 0.2);
+
+      // 6. Gas PPM
+      drawSparkline('canvas-gas', [
+        { data: telemetryHistory.gas, color: 'rgba(251, 113, 133, 0.9)' }
+      ], 0.0, 25.0);
+    }
+
+    function drawSparkline(canvasId, lines, dMin, dMax) {
+      const canvas = $$(canvasId);
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      
+      const dpr = window.devicePixelRatio || 1;
+      if (canvas.width !== w * dpr) {
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+      }
+      
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      ctx.scale(dpr, dpr);
+
+      // Draw faint gridlines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.015)';
+      ctx.lineWidth = 1;
+      for (let y = 10; y < h; y += 20) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+
+      lines.forEach(line => {
+        const arr = line.data;
+        if (!arr || arr.length < 2) return;
+        
+        ctx.beginPath();
+        ctx.strokeStyle = line.color;
+        ctx.lineWidth = lines.length === 1 ? 2 : 1.3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (let i = 0; i < arr.length; i++) {
+          const val = arr[i];
+          const x = (i / (HISTORY_LEN - 1)) * w;
+          const pct = (val - dMin) / (dMax - dMin);
+          const y = h - (pct * (h - 10)) - 5; // offset margins
+          
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+
+        // Area gradient fill for single lines
+        if (lines.length === 1) {
+          const areaGrd = ctx.createLinearGradient(0, 0, 0, h);
+          areaGrd.addColorStop(0, line.color.replace('0.9', '0.08'));
+          areaGrd.addColorStop(1, 'transparent');
+          ctx.lineTo((arr.length - 1) / (HISTORY_LEN - 1) * w, h);
+          ctx.lineTo(0, h);
+          ctx.fillStyle = areaGrd;
+          ctx.fill();
+        }
+      });
+      ctx.restore();
+    }
+
+    function handleTelemetryFrame(data) {
+      const voltages = data.voltages || [3.8,3.8,3.8,3.8];
+      const temps = data.temperatures || [34,34,34,34];
+      const current = data.current_a || 0.0;
+      const soh = data.soh_pct || 100.0;
+      const vib = data.vibration_g || 0.03;
+      const gas = data.gas_ppm || 5.0;
+
+      $$('txt-val-volt').textContent = voltages.map(x => x.toFixed(2)).join(' | ') + ' V';
+      $$('txt-val-temp').textContent = temps.map(x => x.toFixed(0)).join(' | ') + ' °C';
+      $$('txt-val-current').textContent = current.toFixed(1) + ' A';
+      $$('txt-val-soh').textContent = soh.toFixed(1) + ' %';
+      $$('txt-val-vibration').textContent = vib.toFixed(2) + ' g';
+      $$('txt-val-gas').textContent = gas.toFixed(0) + ' ppm';
+
+      // Push telemetry
+      pushTelemetryPoint(telemetryHistory.v1, voltages[0]);
+      pushTelemetryPoint(telemetryHistory.v2, voltages[1]);
+      pushTelemetryPoint(telemetryHistory.v3, voltages[2]);
+      pushTelemetryPoint(telemetryHistory.v4, voltages[3]);
+      
+      pushTelemetryPoint(telemetryHistory.t1, temps[0]);
+      pushTelemetryPoint(telemetryHistory.t2, temps[1]);
+      pushTelemetryPoint(telemetryHistory.t3, temps[2]);
+      pushTelemetryPoint(telemetryHistory.t4, temps[3]);
+      
+      pushTelemetryPoint(telemetryHistory.current, current);
+      pushTelemetryPoint(telemetryHistory.soh, soh);
+      pushTelemetryPoint(telemetryHistory.vibration, vib);
+      pushTelemetryPoint(telemetryHistory.gas, gas);
+
+      renderWaveformCharts();
+
+      const isAnomalous = data.is_anomaly;
+      if (isAnomalous) {
+        lastFaultReason = data.alert_reason || 'MODEL_ANOMALY';
+        $$('alert-strip-reason').textContent = `${lastFaultReason} — Inference running latency: 1.2ms`;
+        $$('alert-strip').classList.add('active');
+      } else {
+        $$('alert-strip').classList.remove('active');
+      }
+    }
+
+    function establishWebSocket() {
+      if(ws && ws.readyState < 2) return;
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        $$('connection-pill').className = 'hud-pill live';
+        $$('connection-txt').textContent = 'Live telemetry';
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        if (offlineSimulationTimer) { clearInterval(offlineSimulationTimer); offlineSimulationTimer = null; }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          handleTelemetryFrame(payload);
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        $$('connection-pill').className = 'hud-pill dead';
+        $$('connection-txt').textContent = 'Link Offline (Reconnecting…)';
+        reconnectTimer = setTimeout(establishWebSocket, 3000);
+        if (!offlineSimulationTimer) triggerOfflineDemoSync();
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    /* ── Offline Backup Simulation ── */
+    let offlineSimulationTimer = null;
+    let cycleCounter = 0;
+
+    function triggerOfflineDemoSync() {
+      if (offlineSimulationTimer) return;
+      offlineSimulationTimer = setInterval(() => {
+        cycleCounter++;
+        const isFaultState = (Math.floor(cycleCounter / 100) % 2) === 1;
+        const timestamp = Date.now();
+
+        let voltages, temps, isAnomaly, alert_reason, current_a, vibration_g, gas_ppm;
+        if (isFaultState) {
+          voltages = [3.81, 3.82, 1.25, 3.82];
+          temps = [34.2, 34.3, 115.2, 34.1];
+          isAnomaly = true;
+          alert_reason = "CELL_3_VOLT_LOW(1.25V)|CELL_3_TEMP_HIGH(115.2C)";
+          current_a = -12.4;
+          vibration_g = 0.08 + Math.random() * 0.02;
+          gas_ppm = 13 + Math.floor(Math.random() * 3);
+        } else {
+          voltages = [3.82, 3.81, 3.80, 3.83];
+          temps = [34.1, 34.3, 34.2, 34.4];
+          isAnomaly = false;
+          alert_reason = "";
+          current_a = -1.6;
+          vibration_g = 0.03 + Math.random() * 0.01;
+          gas_ppm = 5 + Math.floor(Math.random() * 2);
+        }
+
+        handleTelemetryFrame({
+          packet_count: cycleCounter,
+          voltages: voltages,
+          temperatures: temps,
+          is_anomaly: isAnomaly,
+          alert_reason: alert_reason,
+          current_a: current_a,
+          vibration_g: vibration_g,
+          gas_ppm: gas_ppm,
+          soh_pct: isFaultState ? 24.5 : 94.2,
+          timestamp: timestamp
+        });
+      }, 100);
+    }
+
+    // Init
+    establishWebSocket();
+  </script>
+</body>
+</html>

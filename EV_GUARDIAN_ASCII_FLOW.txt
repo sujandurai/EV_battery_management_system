@@ -1,0 +1,517 @@
+
++==============================================================================+
+|              EV GUARDIAN AI  --  COMPLETE SYSTEM ASCII FLOWCHART             |
+|     Arduino UNO Q  |  Snapdragon X PC  |  Mobile App  |  Cloud AI 100       |
++==============================================================================+
+
+
+
+
++==============================================================================+
+|  NODE 1 :  ARDUINO UNO Q   (The Car's Sensing Device)                       |
++==============================================================================+
+
+   +------------------+  +------------------+  +------------------+
+   | Cell 1 Voltage   |  | Cell 3 Voltage   |  | Gas Sensor MQ-2  |
+   | Analog Pin A0    |  | Analog Pin A2    |  | Analog Pin A6    |
+   +--------+---------+  +--------+---------+  +--------+---------+
+            |                     |                     |
+   +------------------+  +------------------+  +------------------+
+   | Cell 2 Voltage   |  | Cell 4 Voltage   |  | Temperature      |
+   | Analog Pin A1    |  | Analog Pin A3    |  | Analog Pin A5    |
+   +--------+---------+  +--------+---------+  +--------+---------+
+            |                     |                     |
+            +---------------------+---------------------+
+                                  |
+                                  | (all analog sensors)
+                                  v
+                    +-------------+-------------+
+                    |   ZEPHYR ADC DRIVER        |
+                    |   Converts voltage signal  |
+                    |   to 12-bit number 0-4095  |
+                    +-------------+-------------+
+                                  |
+   +------------------------------+
+   |
+   |   Also connected separately:
+   |
+   |   +------------------+
+   |   | Vibration Sensor |
+   |   | MPU6050 via I2C  |
+   |   | Qwiic connector  |
+   |   +--------+---------+
+   |            |
+   |   +--------+---------+
+   |   | ZEPHYR I2C DRIVER|
+   |   | Reads X, Y, Z    |
+   |   | accel registers  |
+   |   +--------+---------+
+   |            |
+   +------------+
+                |
+                v
+   +------------------------------+
+   |   ZEPHYR TASK THREAD 1       |
+   |   (Runs every 100ms)         |
+   |                              |
+   |   Reads all sensors:         |
+   |   ADC 2912  -->  3.82 V      |
+   |   ADC  623  -->  1.25 V *ERR |
+   |   ADC 1515  -->  34.5 C      |
+   |   ADC  880  --> -12.4 A      |
+   |   ADC   47  -->  12 PPM gas  |
+   |   I2C       -->  0.08 G vib  |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |   TINYML / DSP FILTER        |
+   |                              |
+   |   Removes electrical noise   |
+   |   from EV motor interference.|
+   |   Uses 5-tap median filter.  |
+   |   Prevents false alarms.     |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |   ZEPHYR TASK THREAD 2       |
+   |   (Bridge Writer)            |
+   |                              |
+   |   Bridge.put("voltages",     |
+   |     "3.82,3.81,1.25,3.83")   |
+   |   Bridge.put("temperature",  |
+   |     "34.2")                  |
+   |   Bridge.put("current",      |
+   |     "-12.4")                 |
+   |   Bridge.put("gas", "12")    |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |   RPC BRIDGE (Shared Memory) |
+   |                              |
+   |   A shared memory table      |
+   |   both STM32 and Linux can   |
+   |   read and write to.         |
+   |                              |
+   |   "voltages"  = 3.82,3.81.. |
+   |   "temp"      = 34.2         |
+   |   "current"   = -12.4        |
+   |   "trust_status" = OK/FAULT  |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |   QRB2210 LINUX (gateway.py) |
+   |   (Runs every 100ms)         |
+   |                              |
+   |   Reads the bridge values.   |
+   |   Wraps them into JSON.      |
+   |   Decides how to send data.  |
+   +---+----------+---------------+
+       |          |
+       |          +-----------------------------+
+       |                                        |
+  (Wi-Fi OK)                           (Wi-Fi is DOWN)
+       |                                        |
+       v                                        v
++------+------------+              +------------+----------+
+|  MQTT PUBLISH     |              |  eMMC CACHE STORAGE   |
+|                   |              |                       |
+|  Sends JSON to    |              |  Saves JSON packets   |
+|  Snapdragon PC    |              |  to local flash file. |
+|  via Wi-Fi.       |              |  Sends them later     |
+|                   |              |  when Wi-Fi returns.  |
+|  Topic:           |              |                       |
+|  "ev/sensor/      |              +-----------------------+
+|   telemetry"      |
++------+------------+
+       |
+       |   (Also running at same time:)
+       |
+       |   +------------------------------+
+       |   |  BLE GATT SERVER             |
+       |   |  Bluetooth 5.1               |
+       |   |  Always broadcasts battery   |
+       |   |  status for mobile fallback. |
+       |   +------------------------------+
+       |
+       |   +------------------------------+
+       |   |  MQTT FEEDBACK LISTENER      |
+       |   |  Topic: ev/analytics/        |
+       |   |         trust_status         |
+       |   |                              |
+       |   |  Receives "FAULT" from PC.   |
+       |   |  Writes to bridge:           |
+       |   |  bridge.put("trust_status",  |
+       |   |             "FAULT")         |
+       |   +-------------+----------------+
+       |                 |
+       |                 v
+       |   +------------------------------+
+       |   |  ZEPHYR TASK THREAD 3        |
+       |   |  (LED Matrix -- every 500ms) |
+       |   |                              |
+       |   |  Reads "trust_status"        |
+       |   |                              |
+       |   |  If "FAULT" --> Flash  !! on |
+       |   |                LED Matrix    |
+       |   |  If "OK"    --> Show battery |
+       |   |                animation     |
+       |   +------------------------------+
+       |
+       v
+   (data goes to Snapdragon PC)
+
+
+
+
++==============================================================================+
+|  NODE 2 :  SNAPDRAGON X PC   (The Car's AI Brain)                           |
++==============================================================================+
+
+   +------------------------------+
+   |  MOSQUITTO MQTT BROKER       |
+   |  Port 1883                   |
+   |                              |
+   |  Receives JSON from Arduino. |
+   |  Delivers to backend.py.     |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |  PYTHON BACKEND (backend.py) |
+   |                              |
+   |  1. Reads JSON from MQTT     |
+   |  2. Extracts 8 values:       |
+   |       C1=3.82  C2=3.81       |
+   |       C3=1.25  C4=3.83       |
+   |       Curr=-12.4             |
+   |       Temp=115.2             |
+   |       Vib=0.08  Gas=12       |
+   |  3. Saves to SQLite DB       |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |  FEATURE VECTORIZER          |
+   |                              |
+   |  Builds a numpy array:       |
+   |  [3.82, 3.81, 1.25, 3.83,   |
+   |   -12.4, 115.2, 0.08, 12]   |
+   |  Shape: [1 x 8]  Float32    |
+   +-------------+----------------+
+                 |
+                 v
+   +------------------------------+
+   |  HEXAGON NPU (45 TOPS)       |
+   |  QNN Execution Provider      |
+   |  ONNX Runtime                |
+   |                              |
+   |  Runs 2 AI models in 1.2ms: |
+   |                              |
+   |  +------------------------+  |
+   |  |  MODEL 1: TRUST ENGINE |  |
+   |  |  Is each cell reading  |  |
+   |  |  real or a loose wire? |  |
+   |  |                        |  |
+   |  |  Cell 1: 99%  OK    v  |  |
+   |  |  Cell 2: 99%  OK    v  |  |
+   |  |  Cell 3: 14%  FAULT X  |  |
+   |  |  Cell 4: 99%  OK    v  |  |
+   |  +------------------------+  |
+   |                              |
+   |  +------------------------+  |
+   |  |  MODEL 2: SOH MODEL    |  |
+   |  |  How healthy is the    |  |
+   |  |  battery overall?      |  |
+   |  |                        |  |
+   |  |  SOH = 94.2%           |  |
+   |  +------------------------+  |
+   +---+----------+---------------+
+       |          |
+       |          |
+  (FAULT found)  (All healthy)
+  Trust < 30%    Trust >= 30%
+       |          |
+       v          v
++------+------+  +------+-------------------------------+
+|  PUBLISH    |  |  WEBSOCKET BROADCAST SERVER          |
+|  "FAULT"    |  |  Port 8080                           |
+|  to MQTT    |  |                                      |
+|             |  |  Sends live frame every 100ms:       |
+|  Topic:     |  |  {                                   |
+|  "ev/       |  |    voltages: [3.82,3.81,1.25,3.83], |
+|  analytics/ |  |    trust:    [99, 99, 14, 99],       |
+|  trust_     |  |    soh_pct:  94.2,                   |
+|  status"    |  |    latency:  1.2 ms                  |
+|             |  |  }                                   |
+|  Goes back  |  |                                      |
+|  to Arduino |  +--+----------------+----------+-------+
+|  to flash   |     |                |          |
+|  LED warn.  |     v                v          v
++-------------+ +--------+    +----------+ +----------+
+               | 3D TWIN |    | SQLITE   | | LLM      |
+               | DASH    |    | DATABASE | | CACHE    |
+               |         |    |          |          |
+               | React + |    | Logs all | | Keeps    |
+               | Three.js|    | packets  | | last     |
+               |         |    | for      | | 1,000    |
+               | Green = |    | history  | | readings |
+               | Healthy |    | and      | | for      |
+               | Red =   |    | cloud    | | offline  |
+               | Fault   |    | upload   | | LLM.     |
+               +---+-----+    +----------+ +----+-----+
+                   |                            |
+                   |                            v
+                   |            +--------------------------------+
+                   |            |  OFFLINE LLM (Llama-3-8B)     |
+                   |            |  Runs on NPU/GPU locally.      |
+                   |            |  No internet needed.           |
+                   |            |                                |
+                   |            |  Q: "Why is Cell 3 broken?"   |
+                   |            |                                |
+                   |            |  A: "Cell 3 reads 1.25V but   |
+                   |            |  others are 3.82V. Temp is    |
+                   |            |  115C vs 34C average. This    |
+                   |            |  is a sensor disconnect, not  |
+                   |            |  a real fault. Check the JST  |
+                   |            |  connector on Cell 3."        |
+                   |            +--------------------------------+
+                   |
+                   v
+               (data goes to Mobile Phone)
+
+
+
+
++==============================================================================+
+|  NODE 3 :  COMPANION MOBILE PHONE   (The Driver's Pocket Dashboard)         |
++==============================================================================+
+
+       +----------------------------+     +----------------------------+
+       |  WEBSOCKET CLIENT          |     |  BLE GATT CLIENT           |
+       |  (Normal -- Wi-Fi path)    |     |  (Fallback -- no Wi-Fi)    |
+       |                            |     |                            |
+       |  Connects to PC port 8080  |     |  Phone scans Bluetooth     |
+       |  Gets full NPU results.    |     |  Connects to Arduino BLE.  |
+       |  Updates every 100ms.      |     |  Gets raw cell voltages.   |
+       +----------+-----------------+     +----------+-----------------+
+                  |                                  |
+                  +------------------+---------------+
+                                     |
+                                     v
+   +---------------------------------------------------------------------+
+   |  SCREEN 1: HOME DASHBOARD                                          |
+   |                                                                     |
+   |   State of Charge  :  87%   [=========-]                           |
+   |   State of Health  :  94.2% (battery capacity retained)            |
+   |   Temperature      :  34 C  (normal)                               |
+   |   Driving Range    :  320 km remaining                             |
+   |                                                                     |
+   |   Cell Voltages:                                                    |
+   |     Cell 1:  3.82V  [==========]  OK                              |
+   |     Cell 2:  3.81V  [==========]  OK                              |
+   |     Cell 3:  1.25V  [===-------]  !! FAULT !!                     |
+   |     Cell 4:  3.83V  [==========]  OK                              |
+   +----------------------------------+----------------------------------+
+                                      |
+                                      v
+   +---------------------------------------------------------------------+
+   |  SCREEN 2: LIVE ALERT ENGINE                                        |
+   |                                                                     |
+   |  Checks: Is any cell trust score below 30%?                        |
+   |                           |                                         |
+   |              +------------+------------+                            |
+   |           YES|                         |NO                          |
+   |              v                         v                            |
+   |  +-----------------------+   +-----------------------+             |
+   |  |  !! CRITICAL ALERT !! |   |  SYSTEM NORMAL        |             |
+   |  |                       |   |                       |             |
+   |  |  Screen turns RED.    |   |  Green status badge.  |             |
+   |  |  Phone vibrates.      |   |  No alerts.           |             |
+   |  |  Alarm sound plays.   |   |  All cells OK.        |             |
+   |  |  Shows message:       |   +-----------------------+             |
+   |  |                       |                                         |
+   |  |  "CELL 3 FAULT        |                                         |
+   |  |   Trust: 14%          |                                         |
+   |  |   Sensor Disconnect.  |                                         |
+   |  |   Check connector."   |                                         |
+   |  +-----------------------+                                         |
+   +---------------------------------------------------------------------+
+                                      |
+                                      v
+   +---------------------------------------------------------------------+
+   |  SCREEN 3: BLE DIAGNOSTIC (Offline Fallback)                        |
+   |                                                                     |
+   |  Tap "Scan Device" --> phone finds "EV-GUARDIAN-01" via Bluetooth  |
+   |  Connects directly to Arduino (no Wi-Fi, no internet needed).      |
+   |  Shows raw cell voltages and temperature live.                     |
+   |  Useful in underground parking or remote areas.                    |
+   +---------------------------------------------------------------------+
+
+
+
+
++==============================================================================+
+|  NODE 4 :  QUALCOMM CLOUD AI 100   (The Central Lab for All Fleet Cars)     |
++==============================================================================+
+
+  +---------------------------+          +--------------------------------+
+  |  DAILY SUMMARY UPLOAD     |          |  INCIDENT SNAPSHOT UPLOAD      |
+  |  (Every 24 hours)         |          |  (Immediately on fault)        |
+  |                           |          |                                |
+  |  Sent by Snapdragon PC    |          |  Sent by Snapdragon PC when    |
+  |  automatically overnight. |          |  NPU detects a FAULT event.    |
+  |                           |          |                                |
+  |  Includes:                |          |  Includes:                     |
+  |  - Vehicle VIN number     |          |  - 10 seconds of raw data      |
+  |  - Total km driven        |          |    at 10Hz resolution          |
+  |  - Average SOH today      |          |  - Trust score that triggered  |
+  |  - Charge cycle count     |          |    the alarm                   |
+  |  - Peak temperature today |          |  - Vehicle ID + Timestamp      |
+  |  - Fault event count      |          |  - AI model version used       |
+  +------------+--------------+          +---------------+----------------+
+               |                                         |
+               +---------------------+-------------------+
+                                     |
+                                     | (HTTPS POST request)
+                                     v
+              +-------------------------------------------+
+              |  CLOUD AI 100 HTTPS INGRESS ENDPOINT      |
+              |                                           |
+              |  Secure API server on the cloud.          |
+              |  Accepts uploads from all fleet vehicles. |
+              |  Validates data and queues for storage.   |
+              |                                           |
+              |  URL:  https://evguardian.cloud.ai/fleet  |
+              |  Auth: API key per vehicle (VIN-based)    |
+              +----------------------+--------------------+
+                                     |
+                                     v
+              +-------------------------------------------+
+              |  CLOUD FLEET DATABASE                     |
+              |                                           |
+              |  Stores history from ALL vehicles.        |
+              |                                           |
+              |  Tracks:                                  |
+              |  - Battery degradation over time          |
+              |  - Fault patterns across fleet models     |
+              |  - Temperature vs cycle count data        |
+              |  - SOH trend per vehicle                  |
+              |                                           |
+              |  Answers questions like:                  |
+              |  "Which cars need battery swap in         |
+              |   the next 6 months?"                     |
+              +----------------------+--------------------+
+                                     |
+                                     v
+              +-------------------------------------------+
+              |  MODEL RETRAINING ENGINE                  |
+              |  (Runs on Cloud AI 100 chips)             |
+              |                                           |
+              |  1. Collects real fault events from       |
+              |     all cars in the fleet.                |
+              |  2. Labels: real fault vs sensor noise.   |
+              |  3. Retrains the Sensor Trust model       |
+              |     with new labelled real-world data.    |
+              |  4. Retrains the SOH regression model     |
+              |     using cycle count vs capacity loss.   |
+              |  5. Uses INT8 batch processing --         |
+              |     fast and energy-efficient.            |
+              +----------------------+--------------------+
+                                     |
+                                     v
+              +-------------------------------------------+
+              |  QUALCOMM AI HUB COMPILER                 |
+              |                                           |
+              |  Takes the retrained ONNX model file      |
+              |  and compiles it into QNN format --       |
+              |  optimised for Snapdragon X Elite NPU.    |
+              |                                           |
+              |  Command:                                 |
+              |  qai-hub-client.compile(                  |
+              |    model  = "trust_v2.onnx",              |
+              |    device = "Snapdragon X Elite",         |
+              |    options = "--target_runtime qnn"       |
+              |  )                                        |
+              |                                           |
+              |  Output: "trust_v2.qnn"                  |
+              |  Smaller size + faster NPU inference.     |
+              +----------------------+--------------------+
+                                     |
+                                     v
+              +-------------------------------------------+
+              |  OTA MODEL DELIVERY                       |
+              |  (Over-The-Air, like a phone update)      |
+              |                                           |
+              |  Cloud pushes new .qnn file to all        |
+              |  online Snapdragon PC clients.            |
+              |                                           |
+              |  On the car PC:                           |
+              |  1. Downloads new model file.             |
+              |  2. backend.py detects the new file.      |
+              |  3. Reloads ONNX Runtime session.         |
+              |  4. Dashboard shows notification:         |
+              |     "AI Model v2.0 installed.             |
+              |      NPU Trust Engine updated."           |
+              |  5. Next 100ms cycle uses new model.      |
+              |  (Driver does not need to do anything.)   |
+              +-------------------------------------------+
+
+
+
+
++==============================================================================+
+|  FULL SYSTEM DATA JOURNEY  --  ONE FAULT EVENT, STEP BY STEP                |
++==============================================================================+
+
+  STEP  1  -->  Cell 3 voltage sensor reads 1.25V (should be 3.82V)
+                |
+  STEP  2  -->  ADC driver converts raw signal to digital number
+                |
+  STEP  3  -->  Zephyr Thread 1 converts ADC number to 1.25 Volts
+                |
+  STEP  4  -->  DSP filter confirms it is not a spike -- it is real
+                |
+  STEP  5  -->  Bridge.put("voltages", "3.82,3.81,1.25,3.83")
+                |
+  STEP  6  -->  Linux gateway reads bridge, builds JSON packet
+                |
+  STEP  7  -->  MQTT publishes JSON to Snapdragon PC over Wi-Fi
+                |
+  STEP  8  -->  backend.py extracts 8 values, builds [1x8] array
+                |
+  STEP  9  -->  Hexagon NPU runs Trust Model -- Cell 3 = 14% trust
+                |
+  STEP 10  -->  Hexagon NPU runs SOH Model -- Battery = 94.2% healthy
+                |
+  STEP 11  -->  14% < 30% threshold --> FAULT!
+                |
+  STEP 12  -->  Publishes "FAULT" to "ev/analytics/trust_status"
+                |
+  STEP 13  -->  Arduino gateway receives "FAULT"
+                |
+  STEP 14  -->  bridge.put("trust_status", "FAULT")
+                |
+  STEP 15  -->  Zephyr Thread 3 reads FAULT, flashes !! on LED matrix
+                |
+  STEP 16  -->  WebSocket sends alert to 3D dashboard and phone app
+                |
+  STEP 17  -->  Phone app sounds alarm: "Cell 3 Sensor Disconnect -- 14%"
+                |
+  STEP 18  -->  User asks Llama-3: "What is wrong with Cell 3?"
+                |
+  STEP 19  -->  Llama-3 reads 1,000 cached readings, replies offline:
+                "Sensor disconnect on Cell 3. Check JST connector."
+                |
+  STEP 20  -->  Cloud receives incident snapshot via HTTPS (10s data)
+                |
+  STEP 21  -->  Cloud retrains model with new fleet fault data overnight
+                |
+  STEP 22  -->  AI Hub compiles new model for Hexagon NPU (QNN format)
+                |
+  STEP 23  -->  OTA pushes new model to all fleet cars silently
+
++==============================================================================+

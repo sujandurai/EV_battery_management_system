@@ -1,0 +1,119 @@
+/*
+ * EV Guardian — Zephyr Devicetree Overlay
+ * =========================================
+ * File   : boards/arduino_uno_q.overlay
+ * Board  : Arduino UNO Q (STM32U585)
+ * Purpose: Pin and peripheral configuration for EV Guardian sensor suite
+ */
+
+/ {
+    chosen {
+        zephyr,console    = &usart1;
+        zephyr,shell-uart = &usart1;
+        zephyr,sram       = &sram0;
+        zephyr,flash      = &flash0;
+    };
+
+    aliases {
+        adc0 = &adc1;
+        i2c0 = &i2c1;
+    };
+};
+
+/* ── ADC1: Cell voltages + current + temperature + gas ─────────────────── */
+&adc1 {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    /* Cell 1: PA0 (voltage divider 10k/10k → max 4.2V → 2.1V at ADC) */
+    channel@0 {
+        reg = <0>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA0>;
+    };
+
+    /* Cell 2: PA1 */
+    channel@1 {
+        reg = <1>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA1>;
+    };
+
+    /* Cell 3: PA2 */
+    channel@2 {
+        reg = <2>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA2>;
+    };
+
+    /* Cell 4: PA3 */
+    channel@3 {
+        reg = <3>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA3>;
+    };
+
+    /* ACS712 Current Sensor: PA4 */
+    channel@4 {
+        reg = <4>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA4>;
+    };
+
+    /* NTC Thermistor: PA5 */
+    channel@5 {
+        reg = <5>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA5>;
+    };
+
+    /* MQ-2 Gas Sensor: PA6 */
+    channel@6 {
+        reg = <6>;
+        zephyr,gain             = "ADC_GAIN_1";
+        zephyr,reference        = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME(ADC_ACQ_TIME_TICKS, 160)>;
+        zephyr,input-positive   = <STM32_PIN_PA6>;
+    };
+};
+
+/* ── I2C1: MPU6050 Vibration Sensor (Fast Mode 400kHz) ─────────────────── */
+&i2c1 {
+    status    = "okay";
+    clock-frequency = <I2C_BITRATE_FAST>;  /* 400 kHz */
+    pinctrl-0 = <&i2c1_scl_pb6 &i2c1_sda_pb7>;
+    pinctrl-names = "default";
+
+    mpu6050: mpu6050@68 {
+        compatible = "invensense,mpu6050";
+        reg        = <0x68>;
+        label      = "MPU6050";
+        int-gpios  = <&gpiob 5 GPIO_ACTIVE_HIGH>;
+    };
+};
+
+/* ── USART1: Debug Console (115200 baud) ───────────────────────────────── */
+&usart1 {
+    status    = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&usart1_tx_pa9 &usart1_rx_pa10>;
+    pinctrl-names = "default";
+};
+
+/* ── GPIOB: LED Matrix columns (PB0-PB3) ──────────────────────────────── */
+&gpiob {
+    status = "okay";
+};

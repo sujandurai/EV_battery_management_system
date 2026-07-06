@@ -1,0 +1,130 @@
+================================================================================
+EV GUARDIAN AI: NODE-BY-NODE SYSTEM DATA FLOW bluePRINT
+================================================================================
+
+This document outlines the detailed operations, timing cycles, communication
+protocols, and data structures between the critical nodes of the EV Guardian AI:
+1. ARDUINO UNO Q (STM32 MCU + QRB2210 MPU)
+2. SNAPDRAGON X COPILOT+ PC (XPC)
+3. COMPANION MOBILE PHONE
+4. QUALCOMM CLOUD AI 100 (Fleet Analytics)
+
+--------------------------------------------------------------------------------
+1. ARDUINO UNO Q EDGE sensing NODE
+--------------------------------------------------------------------------------
+The Arduino Uno Q runs a dual-core architectural split:
+* STM32U585 MCU Core runs Zephyr RTOS for deterministic signal acquisition.
+* QRB2210 MPU Core runs Debian Linux for bridge routing & network translation.
+
+A. Sensing Loop (STM32 - Zephyr RTOS):
+- Wakes every 100ms (10Hz).
+- Collects raw measurements:
+  * Cell Voltages 1-4 (ADC Divider pins A0-A3)
+  * Current (ACS712 Sensor pin A4)
+  * Temperature (Thermistor divider pin A5)
+  * Combustible Gas (MQ-2 Sensor pin A6)
+  * Vibration (MPU6050 Accelerometer via Fast-Mode I2C Bus at 400kHz)
+- Executes local DSP Noise Reduction (moving median/Kalman filter) to reject
+  high-frequency electromagnetic interference from the EV motors.
+- Formats scaled physical values to character arrays ("voltages", "temperature").
+- Writes values to the local inter-core bridge using Bridge.put().
+
+B. Gateway daemon (QRB2210 MPU - Linux):
+- Wakes every 100ms (10Hz) to match the sensing loop.
+- Reads strings from the bridge via bridge.get() (e.g. "voltages" -> "3.82,3.81,1.25,3.83").
+- Transforms variables into a standard JSON telemetry payload:
+  Topic: "ev/sensor/telemetry"
+  Payload:
+  {
+    "timestamp": 177904008,
+    "device_id": "ev-uno-q-01",
+    "cells": {
+      "voltage_v": [3.82, 3.81, 1.25, 3.83],
+      "temp_c": [34.2, 34.2, 34.2, 34.2]
+    },
+    ...
+  }
+- Fallback mechanics:
+  * If Wi-Fi link is connected: Publishes JSON over Wi-Fi 5 connection to XPC MQTT.
+  * If Wi-Fi link is lost: Appends telemetry JSON payload locally to eMMC storage.
+- BLE GATT Server:
+  * Continuously advertises real-time battery status values over Bluetooth 5.1
+    to local personal receivers.
+
+C. Display Matrix Loop (STM32 - Zephyr RTOS):
+- Wakes every 500ms (2Hz).
+- Reads "trust_status" flag from the memory bridge (Bridge.get("trust_status")).
+- If "trust_status" is "FAULT": Flashes warning symbol ("!") on the LED display.
+- If "trust_status" is "OK": Cycles a health charging bar animation.
+
+--------------------------------------------------------------------------------
+2. SNAPDRAGON X COPILOT+ PC (XPC HUB / VEHICLE LOGIC ENGINE)
+--------------------------------------------------------------------------------
+The XPC hosts the ingestion engine, executes local AI models on the Hexagon NPU,
+and handles React / Three.js frontends and local LLM query caching.
+
+A. Ingestion & Vectorizing (backend.py):
+- Connects to local Mosquitto MQTT Broker (port 1883) over local Wi-Fi router.
+- Subscribes to telemetry stream on topic "ev/sensor/telemetry".
+- Parses JSON data and writes logs to local database.
+- Vectorizes variables into a flat 1x8 float32 NumPy array:
+  X = [Cell1_V, Cell2_V, Cell3_V, Cell4_V, Current_A, Temp_C, Vibration_G, Gas_PPM]
+
+B. Local NPU Inference Engine:
+- Runs ONNX Runtime (ORT) using the Qualcomm QNN Execution Provider (QNN EP)
+  for local processing on the 45 TOPS Hexagon NPU.
+- Dual-Model Pipeline:
+  1. Sensor Trust Engine ONNX Model: Evaluates correlations. Detects whether low Cell
+     voltage and high Temp are telemetry spoofing/loose wires or actual cell hazards.
+     Outputs Trust Score (0-100%).
+  2. State of Health ONNX Model: Estimates capacity retention (SOH%).
+- Outputs predictions inside 1.2ms.
+
+C. UI & Control Feedback Loop:
+- Broadcasts NPU metrics and telemetry over WebSockets (port 8080) to client screens.
+- If a sensor trust threshold fails (Trust % < threshold):
+  * Publishes flag "FAULT" to topic "ev/analytics/trust_status".
+  * The QRB2210 gateway MPU receives this and updates the STM32 to trigger the alarm.
+
+D. Offline Diagnostic LLM (Llama-3-8B):
+- Runs locally on the Snapdragon PC via Ollama.
+- Diagnostic requests use the rolling telemetry history from the local database
+  to construct context prompts.
+- Generates precise diagnosis responses offline (e.g. "Low voltage on Cell 3 is
+  classified as a Sensor Disconnect fault rather than Thermal Runaway. Check connector.").
+
+--------------------------------------------------------------------------------
+3. COMPANION MOBILE PHONE (DRIVER REMOTE INTERFACE)
+--------------------------------------------------------------------------------
+The mobile application displays real-time battery status and provides offline fallback:
+
+A. Connected Mode Operations:
+- Establishes a local WebSocket link to XPC backend (port 8080).
+- Updates visual dials showing State of Charge (SoC%) and thermal heatmaps.
+- Sounds audible alerts if the NPU flags a critical safety event.
+
+B. Local BLE Fallback Mode:
+- If Wi-Fi or cellular networks are unavailable:
+  * Scans for BLE advertisements from the Arduino Uno Q gateway.
+  * Connects directly to the GATT profile properties exposed by the MPU.
+  * Retrieves raw telemetry values and fault codes directly to the UI.
+
+--------------------------------------------------------------------------------
+4. QUALCOMM CLOUD AI 100 (FLEET ANALYTICS & retraining PIPELINE)
+--------------------------------------------------------------------------------
+A cloud system powered by Cloud AI 100 processors logs fleet-wide telemetry and
+manages model updates:
+
+A. Fleet Ingress Endpoint:
+- Hosts ingestion APIs (HTTPS endpoints).
+- Snapdragon PC clients upload daily performance summaries (VIN, mileage, av. SOH).
+- If a safety event occurs, the PC uploads the surrounding 10-second high-resolution
+  sensor snapshot file.
+
+B. Deep Learning Retraining Loop:
+- Aggregates data from the fleet database to retrain Sensor Trust and SOH models.
+- Compiles updated ONNX configurations through the Qualcomm AI Hub CLI tool.
+- Automatically compiles and pushes optimized QNN-compatible model weights to
+  Snapdragon PC instances via OTA system updates.
+
+================================================================================

@@ -1,0 +1,435 @@
+
++==============================================================================+
+|                                                                              |
+|           QUALCOMM CLOUD AI 100  --  FULL DETAILED ASCII FLOWCHART          |
+|                   EV Guardian AI Fleet Analytics Platform                   |
+|                                                                              |
++==============================================================================+
+
+
+
++==============================================================================+
+|  PART 1:  WHO SENDS DATA TO THE CLOUD?  (The Two Data Sources)              |
++==============================================================================+
+
+
+   VEHICLE 1                  VEHICLE 2                  VEHICLE N
+   Snapdragon PC              Snapdragon PC              Snapdragon PC
+        |                          |                          |
+        |                          |                          |
+        v                          v                          v
+  +------------+             +------------+             +------------+
+  | DAILY      |             | DAILY      |             | DAILY      |
+  | SUMMARY    |             | SUMMARY    |             | SUMMARY    |
+  | (24 hrs)   |             | (24 hrs)   |             | (24 hrs)   |
+  |            |             |            |             |            |
+  | - VIN      |             | - VIN      |             | - VIN      |
+  | - Km today |             | - Km today |             | - Km today |
+  | - Avg SOH% |             | - Avg SOH% |             | - Avg SOH% |
+  | - Cycles   |             | - Cycles   |             | - Cycles   |
+  | - Peak Tmp |             | - Peak Tmp |             | - Peak Tmp |
+  | - Faults # |             | - Faults # |             | - Faults # |
+  +-----+------+             +-----+------+             +-----+------+
+        |                          |                          |
+        |                          |                          |
+  +------------+             +------------+             +------------+
+  | INCIDENT   |             | INCIDENT   |             | INCIDENT   |
+  | SNAPSHOT   |             | SNAPSHOT   |             | SNAPSHOT   |
+  | (on fault) |             | (on fault) |             | (on fault) |
+  |            |             |            |             |            |
+  | - 10 secs  |             | - 10 secs  |             | - 10 secs  |
+  |   raw data |             |   raw data |             |   raw data |
+  |   at 10Hz  |             |   at 10Hz  |             |   at 10Hz  |
+  | - Cell that|             | - Cell that|             | - Cell that|
+  |   failed   |             |   failed   |             |   failed   |
+  | - Trust %  |             | - Trust %  |             | - Trust %  |
+  | - Timestamp|             | - Timestamp|             | - Timestamp|
+  | - VIN + ID |             | - VIN + ID |             | - VIN + ID |
+  | - Model ver|             | - Model ver|             | - Model ver|
+  +-----+------+             +-----+------+             +-----+------+
+        |                          |                          |
+        +------------+-------------+-------------+------------+
+                                   |
+                          (HTTPS POST over internet)
+                                   |
+                                   |
+                                   v
+
+
+
++==============================================================================+
+|  PART 2:  CLOUD ENTRY POINT  (Secure API Gateway)                           |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  HTTPS API INGRESS ENDPOINT              |
+                  |                                          |
+                  |  URL:  https://evguardian.cloud.ai/fleet |
+                  |  Port: 443  (encrypted TLS)              |
+                  |  Auth: API key per vehicle (VIN-based)   |
+                  |                                          |
+                  |  Steps it performs:                      |
+                  |  1. Verifies the API key (is this a      |
+                  |     registered vehicle?)                  |
+                  |  2. Validates the JSON format            |
+                  |     (are all required fields present?)   |
+                  |  3. Stamps upload with cloud timestamp   |
+                  |  4. Assigns a unique record ID           |
+                  |  5. Places the record into an ingestion  |
+                  |     queue for the database writer.       |
+                  |                                          |
+                  |  Response to the car:                    |
+                  |  HTTP 200 OK -- "Data received."         |
+                  |  HTTP 401    -- "Invalid API key."       |
+                  |  HTTP 422    -- "Bad data format."       |
+                  +------------------+-----------------------+
+                                     |
+                                     | (validated + queued record)
+                                     |
+                                     v
+
+
+
++==============================================================================+
+|  PART 3:  CLOUD DATABASE  (The Long-Term Memory of the Fleet)               |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  CLOUD FLEET DATABASE                    |
+                  |                                          |
+                  |  Stores EVERYTHING from all vehicles.    |
+                  |                                          |
+                  |  TABLE 1: daily_summaries                |
+                  |  +-------+--------+-------+--------+     |
+                  |  | VIN   | Date   | SOH%  | Cycles |     |
+                  |  +-------+--------+-------+--------+     |
+                  |  | V-001 | Jul 03 | 94.2  |  342   |     |
+                  |  | V-001 | Jul 02 | 94.4  |  341   |     |
+                  |  | V-002 | Jul 03 | 88.1  |  510   |     |
+                  |  +-------+--------+-------+--------+     |
+                  |                                          |
+                  |  TABLE 2: incident_events                |
+                  |  +-------+--------+------+-------+-----+ |
+                  |  | VIN   | Time   | Cell | Trust | Type| |
+                  |  +-------+--------+------+-------+-----+ |
+                  |  | V-001 | 08:14  |  3   | 14%   | DIS | |
+                  |  | V-002 | 22:51  |  1   | 8%    | OVT | |
+                  |  +-------+--------+------+-------+-----+ |
+                  |                                          |
+                  |  TABLE 3: raw_snapshots                  |
+                  |  Stores full 10-second 10Hz sensor arrays|
+                  |  linked to each incident event above.    |
+                  |                                          |
+                  |  TABLE 4: model_versions                 |
+                  |  Tracks which AI model each vehicle has. |
+                  |                                          |
+                  |  WHAT THIS DATABASE ANSWERS:             |
+                  |  - Which vehicles degrade fastest?       |
+                  |  - Is Cell 3 disconnect a fleet-wide     |
+                  |    manufacturing defect?                  |
+                  |  - Which temperature ranges cause most   |
+                  |    battery aging?                        |
+                  |  - Predict: which vehicles need battery  |
+                  |    replacement in next 6 months?         |
+                  +------------------+-----------------------+
+                                     |
+                                     | (fleet-wide aggregated data)
+                                     |
+                                     v
+
+
+
++==============================================================================+
+|  PART 4:  DATA ANALYSIS LAYER  (Understanding the Data)                     |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  FLEET ANALYTICS ENGINE                  |
+                  |                                          |
+                  |  Runs scheduled analytics jobs on the   |
+                  |  database to find patterns.             |
+                  |                                          |
+                  |  JOB 1: SOH Degradation Curve           |
+                  |  Plots SOH% vs charge cycle count for   |
+                  |  every vehicle model. Detects vehicles  |
+                  |  degrading faster than expected.        |
+                  |                                          |
+                  |  JOB 2: Fault Pattern Clustering        |
+                  |  Groups fault events by cell number,    |
+                  |  vehicle model, and temperature range.  |
+                  |  Example finding:                       |
+                  |  "Cell 3 disconnect appears 6x more     |
+                  |   often in vehicles built in batch      |
+                  |   B-2024-07 -- likely a connector       |
+                  |   quality issue from that factory run." |
+                  |                                          |
+                  |  JOB 3: Thermal Risk Scoring            |
+                  |  Identifies vehicles with temperatures  |
+                  |  repeatedly above 45C -- flags them     |
+                  |  for early battery health review.       |
+                  |                                          |
+                  |  JOB 4: Labelling for ML Training       |
+                  |  Tags each incident as:                 |
+                  |  - REAL_FAULT (actual cell problem)     |
+                  |  - SENSOR_NOISE (false EMI reading)     |
+                  |  - LOOSE_WIRE (connector disconnect)    |
+                  |  - THERMAL_RUNAWAY (real overheating)   |
+                  |                                          |
+                  |  This labeled data becomes the training |
+                  |  dataset for the model retraining step. |
+                  +------------------+-----------------------+
+                                     |
+                                     | (labelled training dataset)
+                                     |
+                                     v
+
+
+
++==============================================================================+
+|  PART 5:  MODEL RETRAINING  (Making the AI Smarter)                         |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  CLOUD AI 100 RETRAINING ENGINE          |
+                  |                                          |
+                  |  Uses the labelled fleet data to         |
+                  |  retrain the two ONNX AI models.         |
+                  |                                          |
+                  |  HARDWARE:                               |
+                  |  Runs on Cloud AI 100 accelerator chips  |
+                  |  -- designed for high-throughput AI      |
+                  |  training at data center scale.          |
+                  |                                          |
+                  |  STEP 1: Load Training Data              |
+                  |  Pulls labelled incidents from the DB.   |
+                  |  Splits into: 80% train / 20% test.     |
+                  |                                          |
+                  |  +------------------------------------+   |
+                  |  |  MODEL A: SENSOR TRUST RETRAINING  |  |
+                  |  |                                    |  |
+                  |  |  Input:  [cell voltages, temp,     |  |
+                  |  |           current, vib, gas]       |  |
+                  |  |  Labels: REAL_FAULT / LOOSE_WIRE / |  |
+                  |  |          SENSOR_NOISE              |  |
+                  |  |                                    |  |
+                  |  |  Previous accuracy: 91%            |  |
+                  |  |  New accuracy (after training):    |  |
+                  |  |  95.3% on validation set           |  |
+                  |  +------------------------------------+   |
+                  |                                          |
+                  |  +------------------------------------+   |
+                  |  |  MODEL B: SOH REGRESSION           |  |
+                  |  |  RETRAINING                        |  |
+                  |  |                                    |  |
+                  |  |  Input:  [cycle count, peak temp,  |  |
+                  |  |           discharge rate, age]     |  |
+                  |  |  Output: SOH% estimate             |  |
+                  |  |                                    |  |
+                  |  |  Trained on 50,000+ charge cycle   |  |
+                  |  |  records from the fleet database.  |  |
+                  |  |  MAE error: 0.8% (very accurate)   |  |
+                  |  +------------------------------------+   |
+                  |                                          |
+                  |  STEP 2: INT8 Quantization              |
+                  |  Converts model weights from 32-bit     |
+                  |  floats to 8-bit integers.              |
+                  |  WHY: 4x smaller file, 3x faster NPU,   |
+                  |  almost no accuracy loss.               |
+                  |                                          |
+                  |  STEP 3: Export to ONNX format          |
+                  |  Saves as "sensor_trust_v2.onnx" and   |
+                  |  "soh_estimator_v2.onnx"               |
+                  +------------------+-----------------------+
+                                     |
+                                     | (new ONNX model files)
+                                     |
+                                     v
+
+
+
++==============================================================================+
+|  PART 6:  MODEL COMPILATION  (Preparing for the Car's NPU Chip)             |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  QUALCOMM AI HUB COMPILER                |
+                  |                                          |
+                  |  The generic ONNX model file must be     |
+                  |  compiled into a QNN (Qualcomm Neural    |
+                  |  Network) file to run on the Hexagon NPU |
+                  |  inside the Snapdragon X Elite chip.     |
+                  |                                          |
+                  |  WHY CAN'T IT RUN ONNX DIRECTLY?        |
+                  |  The Hexagon NPU has a custom hardware   |
+                  |  instruction set. The QNN compiler       |
+                  |  translates the model operations into    |
+                  |  Hexagon-native instructions for maximum |
+                  |  speed and minimum power usage.          |
+                  |                                          |
+                  |  COMPILATION COMMAND:                    |
+                  |                                          |
+                  |  qai-hub-client.compile(                 |
+                  |    model  = "sensor_trust_v2.onnx",      |
+                  |    device = "Snapdragon X Elite",        |
+                  |    input_specs = {                       |
+                  |      "telemetry_vector": [1, 8]          |
+                  |    },                                    |
+                  |    options = "--target_runtime qnn       |
+                  |               --quantize int8"          |
+                  |  )                                       |
+                  |                                          |
+                  |  WHAT THE COMPILER DOES:                 |
+                  |  1. Parses the ONNX model graph          |
+                  |  2. Fuses operations (e.g. Conv+ReLU)   |
+                  |     into single NPU instructions        |
+                  |  3. Allocates tensors to fastest         |
+                  |     Hexagon memory banks (VTCM)          |
+                  |  4. Quantizes weights to INT8 precision  |
+                  |  5. Runs test inference to verify output |
+                  |  6. Saves output as .qnn binary file     |
+                  |                                          |
+                  |  OUTPUT FILES:                           |
+                  |  - sensor_trust_v2.qnn   (Trust Model)  |
+                  |  - soh_estimator_v2.qnn  (SOH Model)    |
+                  |                                          |
+                  |  Size:   ~4 MB each (INT8 compressed)   |
+                  |  Latency: 1.2ms on Hexagon HTP          |
+                  +------------------+-----------------------+
+                                     |
+                                     | (compiled .qnn files ready)
+                                     |
+                                     v
+
+
+
++==============================================================================+
+|  PART 7:  OTA DELIVERY  (Pushing New AI to Every Car Silently)              |
++==============================================================================+
+
+
+                  +------------------------------------------+
+                  |  OTA UPDATE DELIVERY SERVER              |
+                  |                                          |
+                  |  Manages secure distribution of new      |
+                  |  model files to all registered vehicles. |
+                  |                                          |
+                  |  STEP 1: VERSION REGISTRY CHECK          |
+                  |  Checks which model version each         |
+                  |  Snapdragon PC currently has.            |
+                  |  Database table: model_versions          |
+                  |  Example:                               |
+                  |    V-001: trust_v1.qnn  <-- old         |
+                  |    V-002: trust_v1.qnn  <-- old         |
+                  |    V-003: trust_v2.qnn  <-- already new |
+                  |                                          |
+                  |  STEP 2: NOTIFY OUTDATED VEHICLES        |
+                  |  Sends a push notification to V-001 and  |
+                  |  V-002: "Model update available."        |
+                  |                                          |
+                  |  STEP 3: SECURE FILE TRANSFER            |
+                  |  When Snapdragon PC is online and idle:  |
+                  |  - Downloads sensor_trust_v2.qnn         |
+                  |  - Downloads soh_estimator_v2.qnn        |
+                  |  - Verifies file checksum (MD5/SHA256)   |
+                  |    to ensure file is not corrupted.      |
+                  |                                          |
+                  |  STEP 4: ATOMIC MODEL SWAP               |
+                  |  backend.py detects new model files.     |
+                  |  Waits for the current 100ms inference   |
+                  |  cycle to finish.                        |
+                  |  Closes the old ONNX Runtime session.    |
+                  |  Opens a new session with new .qnn file. |
+                  |  If it fails, rolls back to old model.  |
+                  |                                          |
+                  |  STEP 5: CONFIRM UPDATE                  |
+                  |  Snapdragon PC sends confirmation to     |
+                  |  cloud: "V-001 now running trust_v2.qnn" |
+                  |  Cloud updates the model_versions table. |
+                  +------------------+-----------------------+
+                                     |
+                                     v
+                          +---------------------+
+                          |  ON THE CAR PC:     |
+                          |  Dashboard shows:   |
+                          |                     |
+                          |  "AI Model v2.0     |
+                          |   installed.        |
+                          |   NPU Trust Engine  |
+                          |   updated silently. |
+                          |   Accuracy: 95.3%"  |
+                          +----------+----------+
+                                     |
+                         +-----------+-----------+
+                         |                       |
+                         v                       v
+               +-----------------+   +-----------------+
+               | Next 100ms      |   | Driver sees     |
+               | inference cycle |   | nothing change  |
+               | uses the new    |   | -- it just got  |
+               | smarter model   |   | smarter quietly |
+               | automatically.  |   | in the background |
+               +-----------------+   +-----------------+
+
+
+
++==============================================================================+
+|  PART 8:  COMPLETE CLOUD AI 100 FLOW SUMMARY  (One-Page View)               |
++==============================================================================+
+
+
+  [ALL FLEET VEHICLES]
+        |
+        |  Every 24 hrs: Daily Summary (VIN, SOH, cycles, temp, faults)
+        |  On fault:     Incident Snapshot (10s raw data at 10Hz)
+        |
+        v
+  [HTTPS API INGRESS]  ── Validates API key and JSON format
+        |
+        v
+  [CLOUD FLEET DATABASE]  ── Stores summaries + incidents + raw snapshots
+        |                     Tracks degradation curves, fault patterns
+        v
+  [FLEET ANALYTICS ENGINE]  ── Clusters fault types, labels training data
+        |                       Finds: REAL_FAULT / LOOSE_WIRE / NOISE
+        v
+  [AI 100 RETRAINING ENGINE]
+        |
+        |-- Model A: Sensor Trust Classifier
+        |   Input:  [8 sensor values]
+        |   Output: Trust score per cell (0-100%)
+        |   New accuracy: 95.3%
+        |
+        |-- Model B: SOH Regression Model
+        |   Input:  [cycle, temp, discharge rate, age]
+        |   Output: Battery health %
+        |   New error: 0.8% MAE
+        |
+        v
+  [INT8 QUANTIZATION]  ── Shrinks models 4x, speeds up NPU 3x
+        |
+        v
+  [QUALCOMM AI HUB COMPILER]  ── Converts ONNX to QNN for Hexagon NPU
+        |                         Fuses ops, allocates VTCM memory
+        |                         Output: sensor_trust_v2.qnn
+        v
+  [OTA UPDATE DELIVERY SERVER]
+        |
+        |  1. Check which vehicles have old models
+        |  2. Send push notification: "Update available"
+        |  3. Secure download of new .qnn files
+        |  4. Verify checksum (no corruption)
+        |  5. Atomic model swap in backend.py
+        |  6. Rollback if swap fails
+        |  7. Confirm update to cloud registry
+        |
+        v
+  [ALL FLEET VEHICLES NOW RUNNING SMARTER AI]
+  Driver does nothing. No reboot. No manual step.
+  Next 100ms inference cycle: new model active.
+
++==============================================================================+

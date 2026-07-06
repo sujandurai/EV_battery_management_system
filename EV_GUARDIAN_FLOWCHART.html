@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EV Guardian AI — Interactive Data Flowchart</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+  
+  :root {
+    --bg-dark: #070714;
+    --card-bg: #0d0d21;
+    --border-color: #1e1e3f;
+    --text-primary: #f0f0f7;
+    --text-secondary: #8a8ab0;
+    --accent-blue: #3b82f6;
+    --accent-green: #10b981;
+    --accent-purple: #8b5cf6;
+    --accent-gold: #f59e0b;
+    --accent-red: #ef4444;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Outfit', sans-serif;
+    background-color: var(--bg-dark);
+    color: var(--text-primary);
+    padding: 40px 20px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 40px;
+    width: 100%;
+    max-width: 1200px;
+  }
+
+  header h1 {
+    font-size: 36px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #fff 30%, var(--text-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+
+  header p {
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  .main-container {
+    width: 100%;
+    max-width: 1250px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    position: relative;
+  }
+
+  /* Grid Layout for Columns */
+  .grid-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 20px;
+    z-index: 2;
+  }
+
+  @media (max-width: 1024px) {
+    .grid-layout {
+      grid-template-columns: 1fr;
+      gap: 30px;
+    }
+  }
+
+  /* Card Columns */
+  .pillar {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+
+  .pillar:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(59, 130, 246, 0.1);
+  }
+
+  /* Pillar Headers */
+  .pillar-header {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .pillar-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 20px;
+  }
+
+  .p-arduino .pillar-icon { background: rgba(59, 130, 246, 0.1); color: var(--accent-blue); }
+  .p-xpc .pillar-icon { background: rgba(16, 115, 14, 0.1); color: var(--accent-green); }
+  .p-mobile .pillar-icon { background: rgba(245, 158, 11, 0.1); color: var(--accent-gold); }
+  .p-cloud .pillar-icon { background: rgba(139, 92, 246, 0.1); color: var(--accent-purple); }
+
+  .p-arduino { border-color: rgba(59, 130, 246, 0.3); }
+  .p-xpc { border-color: rgba(16, 185, 129, 0.3); }
+  .p-mobile { border-color: rgba(245, 158, 11, 0.3); }
+  .p-cloud { border-color: rgba(139, 92, 246, 0.3); }
+
+  .pillar-title {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .pillar-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* Node Blocks */
+  .flow-node {
+    background: #090916;
+    border: 1px solid #14142f;
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .flow-node:hover {
+    border-color: #3b82f6;
+    background: #0f0f23;
+  }
+
+  .flow-node-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .p-arduino .flow-node-title { color: var(--accent-blue); }
+  .p-xpc .flow-node-title { color: var(--accent-green); }
+  .p-mobile .flow-node-title { color: var(--accent-gold); }
+  .p-cloud .flow-node-title { color: var(--accent-purple); }
+
+  .flow-node-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  /* Node Connections indicator dots */
+  .flow-node::before {
+    content: '';
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    left: -5px;
+    top: 22px;
+    background: #14142f;
+    border: 1px solid var(--border-color);
+  }
+
+  .p-arduino .flow-node::before { background: var(--accent-blue); }
+  .p-xpc .flow-node::before { background: var(--accent-green); }
+  .p-mobile .flow-node::before { background: var(--accent-gold); }
+  .p-cloud .flow-node::before { background: var(--accent-purple); }
+
+  /* Interface Connector Line Display */
+  .interface-path {
+    background: rgba(13, 13, 33, 0.4);
+    border: 1px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  .interface-arrow {
+    display: inline-block;
+    color: var(--text-secondary);
+    font-size: 16px;
+    animation: dash 1s infinite alternate;
+  }
+
+  /* SVG Link Drawing */
+  .svg-lines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* Code Segment Snippet Box */
+  .contract-box {
+    margin-top: 30px;
+    width: 100%;
+    max-width: 1250px;
+    background-color: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+
+  .contract-box h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .contract-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+  }
+
+  .tab-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    padding: 8px 16px;
+    border-radius: 10px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+
+  .tab-btn.active, .tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--accent-blue);
+  }
+
+  .code-pre {
+    background: #05050f;
+    border: 1px solid #14142f;
+    border-radius: 12px;
+    padding: 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    overflow-x: auto;
+    color: #a9b2c3;
+    line-height: 1.6;
+    display: none;
+  }
+
+  .code-pre.active-code {
+    display: block;
+  }
+
+  /* Labels */
+  .badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: auto;
+  }
+
+  .badge-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+  .badge-purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+  .badge-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+  .badge-gold { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 30px;
+    padding: 16px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 4px;
+  }
+
+  @keyframes dash {
+    from { transform: translateX(-3px); }
+    to { transform: translateX(3px); }
+  }
+
+  .nav-btn-back {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    padding: 10px 18px;
+    border-radius: 12px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s ease;
+  }
+
+  .nav-btn-back:hover {
+    background: #14142f;
+    border-color: var(--accent-blue);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚡ EV Guardian AI — Interactive Data Flowchart</h1>
+  <p>Qualcomm Snapdragon Multiverse Hackathon Architecture Specification</p>
+</header>
+
+<div class="main-container">
+
+  <!-- Column Layout -->
+  <div class="grid-layout">
+    
+    <!-- PILLAR 1 -->
+    <div class="pillar p-arduino">
+      <div class="pillar-header">
+        <div class="pillar-icon">Q</div>
+        <div>
+          <div class="pillar-title">Arduino UNO Q</div>
+          <div class="pillar-subtitle">Deterministic Sensing Node</div>
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">
+          Acquisition Thread
+          <span class="badge badge-blue">100ms Loop</span>
+        </div>
+        <div class="flow-node-desc">
+          STM32 core runs Zephyr OS. Read cell voltages (A0-A3), current (A4), temp (A5), gas (A6), and vibration (MPU6050 via I2C).
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">DSP Noise Filter</div>
+        <div class="flow-node-desc">
+          Executes local 5-tap median and moving average filters on the signals to strip high-frequency EV traction motor harmonics.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Bridge Write</div>
+        <div class="flow-node-desc">
+          STM32 writes output sensor floats to parameters inside shared memory RPC tables via `Bridge.put("voltages", csv_string)`.
+        </div>
+      </div>
+
+      <div class="interface-path">
+        <span>Hardware IPC Bus</span>
+        <span class="interface-arrow">→</span>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">QRB2210 Gateway</div>
+        <div class="flow-node-desc">
+          MPU Debian Linux daemon checks registers via `bridge.get()`. Packages metrics into formal JSON telemetry templates.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Store-Forward & BLE</div>
+        <div class="flow-node-desc">
+          Saves variables to local eMMC storage when offline. Exposes a Bluetooth 5.1 GATT service node fallback.
+        </div>
+      </div>
+    </div>
+
+    <!-- PILLAR 2 -->
+    <div class="pillar p-xpc">
+      <div class="pillar-header">
+        <div class="pillar-icon">💻</div>
+        <div>
+          <div class="pillar-title">Snapdragon X PC</div>
+          <div class="pillar-subtitle">Hexagon NPU Edge Host</div>
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Mosquitto MQTT</div>
+        <div class="flow-node-desc">
+          Ingests packet inputs from the QRB2210 gateway and vehicles on the topic `ev/sensor/telemetry` over local router link.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">
+          Ingress Vectorizer
+          <span class="badge badge-green">backend.py</span>
+        </div>
+        <div class="flow-node-desc">
+          Parses JSON payload elements. Serializes attributes into a float32 array vector of shape `[1, 8]` for the inference engine.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">
+          Trust & SOH Evaluation
+          <span class="badge badge-green">HTP NPU</span>
+        </div>
+        <div class="flow-node-desc">
+          Runs ONNX Runtime (QNN EP) on the Hexagon HTP NPU to calculate Trust Score % and State of Health % inside 1.2ms.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">WebSocket Server</div>
+        <div class="flow-node-desc">
+          Broadcasts raw variables, trust assessment outcomes, and calculations to client screens via WebSockets.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Offline Llama-3</div>
+        <div class="flow-node-desc">
+          Local assistant (Ollama) reads rolling status history logs to provide natural language battery health diagnoses.
+        </div>
+      </div>
+    </div>
+
+    <!-- PILLAR 3 -->
+    <div class="pillar p-mobile">
+      <div class="pillar-header">
+        <div class="pillar-icon">📱</div>
+        <div>
+          <div class="pillar-title">Companion App</div>
+          <div class="pillar-subtitle">Driver Mobile Receiver</div>
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">WebSocket Link</div>
+        <div class="flow-node-desc">
+          Listens continuously to connection metrics on port 8080. Evaluates incoming variables to refresh screen grids.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Diagnostic Screens</div>
+        <div class="flow-node-desc">
+          Renders circular SoC% dial controls, temperature color map cells, and State of Health (SOH) history plots.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Safety Alerts</div>
+        <div class="flow-node-desc">
+          Watches anomaly codes. Triggers audio alerts and warning popups if cell trust scores drop below safety thresholds.
+        </div>
+      </div>
+
+      <div class="interface-path" style="border-color: rgba(245, 158, 11, 0.3);">
+        <span>Secondary Radio Link</span>
+        <span class="interface-arrow">→</span>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">BLE Diagnostic Mode</div>
+        <div class="flow-node-desc">
+          Establishes fallback links to the QRB2210 GATT parameters over Bluetooth 5.1 if local Wi-Fi networks fail.
+        </div>
+      </div>
+    </div>
+
+    <!-- PILLAR 4 -->
+    <div class="pillar p-cloud">
+      <div class="pillar-header">
+        <div class="pillar-icon">☁️</div>
+        <div>
+          <div class="pillar-title">Cloud AI 100</div>
+          <div class="pillar-subtitle">Fleet Analytics & ML</div>
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">HTTPS Ingress API</div>
+        <div class="flow-node-desc">
+          Receives compressed performance logs from vehicle clients every 24 hours. Accepts 10s incident snapshot blocks.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Fleet Database</div>
+        <div class="flow-node-desc">
+          Aggregates metrics profiles across the vehicle fleet to support battery degradation and thermal profiling analytics.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">Fleet Retraining</div>
+        <div class="flow-node-desc">
+          Iteratively retrains anomaly models on Cloud AI 100 accelerators to improve anomaly detection precision.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">AI Hub Compilation</div>
+        <div class="flow-node-desc">
+          Compiles and quantizes models to QNN format via the `qai-hub` toolchain targeting the Snapdragon X Elite NPU.
+        </div>
+      </div>
+
+      <div class="flow-node">
+        <div class="flow-node-title">OTA Updates</div>
+        <div class="flow-node-desc">
+          Pushes updated QNN-compatible model weights to vehicle edge nodes over secure networking links.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color" style="background: var(--accent-blue);"></div> Arduino UNO Q (Zephyr RTOS + Linux)</div>
+    <div class="legend-item"><div class="legend-color" style="background: var(--accent-green);"></div> Snapdragon X PC (HTP NPU Hub)</div>
+    <div class="legend-item"><div class="legend-color" style="background: var(--accent-gold);"></div> Companion Mobile App</div>
+    <div class="legend-item"><div class="legend-color" style="background: var(--accent-purple);"></div> Qualcomm Cloud AI 100</div>
+  </div>
+
+  <!-- Contracts and Snippets section -->
+  <div class="contract-box">
+    <h3>📂 Data Transfer Contracts &amp; Schemas</h3>
+    
+    <div class="contract-tabs">
+      <button class="tab-btn active" onclick="showCodeStr('telemetryContract')">1. Telemetry JSON (UNO Q ➔ XPC)</button>
+      <button class="tab-btn" onclick="showCodeStr('feedbackContract')">2. Feedback Status (XPC ➔ UNO Q)</button>
+      <button class="tab-btn" onclick="showCodeStr('summaryContract')">3. Fleet Ingress post (XPC ➔ Cloud)</button>
+    </div>
+
+<pre id="telemetryContract" class="code-pre active-code">
+{
+  "timestamp": 177904008,
+  "device_id": "ev-uno-q-01",
+  "cells": {
+    "voltage_v": [3.82, 3.81, 1.25, 3.83],
+    "temp_c": [34.2, 34.2, 34.2, 34.2]
+  },
+  "pack": {
+    "current_a": -12.4,
+    "vibration_g": 0.08,
+    "gas_ppm": 12
+  },
+  "metadata": {
+    "node_status": "OK"
+  }
+}
+</pre>
+
+<pre id="feedbackContract" class="code-pre">
+# Message published by the Python ingestion server on the MQTT network
+# Topic: "ev/analytics/trust_status"
+
+"FAULT"
+</pre>
+
+<pre id="summaryContract" class="code-pre">
+{
+  "vehicle_vin": "EVG-8947A-SNAP",
+  "total_mileage_km": 14205.8,
+  "battery_pack_summary": {
+    "total_charge_cycles": 342,
+    "average_soh_percent": 94.2,
+    "degradation_rate_per_100cycles": 0.35,
+    "peak_operating_temp_c": 115.2
+  },
+  "cell_specific_averages": {
+    "avg_voltages_v": [3.82, 3.81, 1.25, 3.83],
+    "avg_temps_c": [34.2, 34.2, 115.2, 34.2],
+    "voltage_delta_max_v": 2.58
+  },
+  "incident_log": {
+    "anomaly_flagged": "SENSOR_DISCONNECT",
+    "calculated_trust_pct": 14.5
+  }
+}
+</pre>
+  </div>
+
+</div>
+
+<script>
+  function showCodeStr(tabId) {
+    const list = document.querySelectorAll('.code-pre');
+    list.forEach(el => el.classList.remove('active-code'));
+    
+    document.getElementById(tabId).classList.add('active-code');
+    
+    const btns = document.querySelectorAll('.tab-btn');
+    btns.forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+  }
+</script>
+</body>
+</html>

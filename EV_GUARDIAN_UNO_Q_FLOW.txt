@@ -1,0 +1,312 @@
+================================================================================
+                    EV GUARDIAN — ARDUINO UNO Q SYSTEM FLOW
+================================================================================
+
+                         ┌───────────────────────┐
+                         │    PHYSICAL SENSORS    │
+                         │  (Connected to Board)  │
+                         └───────────┬───────────┘
+                                     │
+        ┌────────────────┬──────────┼──────────┬────────────────┐
+        │                │          │          │                │
+        ▼                ▼          ▼          ▼                ▼
+ ┌─────────────┐  ┌─────────────┐        ┌─────────────┐ ┌─────────────┐
+ │  Cell Volt. │  │  Current    │        │ Temperature │ │  Vibration  │
+ │  Sensors x4 │  │  (ACS712)   │        │ Sensors x2  │ │ (MPU6050)   │
+ │             │  │             │        │  (NTC)      │ │             │
+ │ C1 = 2.96V  │  │ I = -12.3A  │        │ T1 = 119°C  │ │ RMS = 0.17g │
+ │ C2 = 2.95V  │  │             │        │ T2 = 97°C   │ │             │
+ │ C3 = 2.96V  │  └─────────────┘        └─────────────┘ └─────────────┘
+ │ C4 = 2.96V  │                     ┌─────────────┐
+                                     │  Gas Sensor │
+                                     │   (MQ-2)    │
+                                     │ CO = 0.524  │
+                                     │    ppm      │
+                                     └──────┬──────┘
+                                            │
+                    ┌───────────────────────┴────────────────────────┐
+                    │        All raw readings collected              │
+
+                    ▼                                                 
+================================================================================
+ STAGE 1 — SENSOR READING            (All sensors read by STM32 MCU)
+================================================================================
+                                     │
+                                     ▼
+================================================================================
+ STAGE 2 — ZEPHYR RTOS SCHEDULER     (STM32 MCU)
+================================================================================
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  TASK 1 — SENSOR READING              runs every 100ms           │
+  │   • Read all 7 sensors (voltage, current, temp, gas, vibration)  │
+  │   • Filter noise (5-point median filter)                         │
+  │   • Calculate rates of change (dV/dt, dT/dt, dI/dt)              │
+  │   • Write 35 parameters to SHARED MEMORY                         │
+  │                                                                  │
+  │  TASK 2 — DISPLAY MANAGER             runs every 50ms            │
+  │   • Check if user touched TFT screen                             │
+  │   • Switch page if touched                                       │
+  │   • Update current page graphics                                 │
+  │                                                                  │
+  │  TASK 3 — SAFETY OUTPUT               runs every 100ms           │
+  │   • Read ML result from shared memory                            │
+  │   • Set charging PWM based on EACI output                        │
+  │   • Update dot matrix display (Normal / Warning / Danger)        │
+  └──────────────────────────────────────────────────────────────────┘
+                                     │
+                     35 parameters written to SHARED MEMORY (SRAM)
+                                     ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                 SHARED MEMORY (SRAM IPC BRIDGE)                  │
+  │                                                                    │
+  │   How STM32 and QRB2210 talk — like a shared whiteboard.          │
+  │                                                                    │
+  │        STM32 WRITES ───────────────► QRB2210 READS               │
+  │        (sensor data, touch events)   (picks up data)             │
+  │                                                                    │
+  │        STM32 READS  ◄─────────────── QRB2210 WRITES              │
+  │        (charging commands, ML result)(sends decisions)            │
+  └──────────────────────────────────────────────────────────────────┘
+                                     │
+                       QRB2210 reads 35 parameters
+                                     ▼
+================================================================================
+ STAGE 3 — EDGE ML PROCESSING        (QRB2210 MPU — Linux Core)
+================================================================================
+
+                          35 SENSOR PARAMETERS
+                                     │
+                    ┌────────────────┴────────────────┐
+                    ▼                                 ▼
+        ┌─────────────────────┐           ┌─────────────────────┐
+        │  MODEL 1:           │           │  MODEL 2:           │
+        │  ANOMALY DETECTOR   │           │  HEALTH ESTIMATOR   │
+        │                     │           │                     │
+        │  "Is something      │           │  "How healthy is    │
+        │   wrong right now?" │           │   this battery      │
+        │                     │           │   overall?"         │
+        │  Output:            │           │  Output:            │
+        │   • Fault Name      │           │   • SOH %           │
+        │   • Fault Class     │           │   • RUL (cycles)    │
+        │   • Risk Score      │           │   • Risk Score      │
+        └──────────┬──────────┘           └──────────┬──────────┘
+                   │                                 │
+                   └────────────────┬────────────────┘
+                                    ▼
+================================================================================
+ STAGE 4 — ML OUTPUT                 (Combined Diagnosis)
+================================================================================
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Primary Fault:     OVERCURRENT_DISCHARGE                        │
+  │  Secondary Fault:   OVERTEMPERATURE                               │
+  │  Fault Class:       5 (Critical)                                  │
+  │  SOH Estimate:      92.12%                                        │
+  │  RUL Prediction:    518 charge cycles remaining                   │
+  │  Risk Score:        82.25 / 100                                   │
+  └──────────────────────────────────────────────────────────────────┘
+                                     │
+                         ML output feeds into EACI
+                                     ▼
+================================================================================
+ STAGE 5 — EDGE ADAPTIVE CHARGING INTELLIGENCE (EACI)
+================================================================================
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  INPUTS:                                                          │
+  │   • SOH   = 92.12%                                                │
+  │   • Risk  = 82.25 (HIGH)                                          │
+  │   • T1    = 119°C (HOT)                                           │
+  │   • Fault = OVERCURRENT + OVERTEMPERATURE                         │
+  │                                                                    │
+  │  DECISION LOGIC:                                                  │
+  │   • Temperature > 45°C ?   ──► YES ──► Reduce current             │
+  │   • Risk > 60 ?            ──► YES ──► Cut to 50%                 │
+  │   • SOH < 80% ?            ──► NO  ──► No extra cut               │
+  │                                                                    │
+  │  OUTPUT:                                                          │
+  │   • Safe Charge Current:  5.0 A   (was 12 A)                      │
+  │   • PWM Duty Cycle:       41.7%                                   │
+  │   • Mode:                 SAFE_DERATED                            │
+  └──────────────────────────────────────────────────────────────────┘
+                                     │
+                    EACI writes charging command to SHARED MEMORY
+                                     ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                        PHYSICAL ACTION                            │
+  │                                                                    │
+  │   STM32 reads EACI command from shared memory                     │
+  │                        │                                          │
+  │                        ▼                                          │
+  │               ┌─────────────────┐                                 │
+  │               │  PWM Pin (PB4)  │                                 │
+  │               │  Duty = 41.7%   │                                 │
+  │               └────────┬────────┘                                 │
+  │                        ▼                                          │
+  │               ┌─────────────────┐                                 │
+  │               │  MOSFET Gate    │                                 │
+  │               │  (IRL540N)      │                                 │
+  │               └────────┬────────┘                                 │
+  │                        ▼                                          │
+  │      CHARGER current physically reduced from 12A to 5A            │
+  │                  — battery protected                              │
+  └──────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+================================================================================
+ STAGE 6 — TFT TOUCH DISPLAY         (STM32 drives via SPI)
+================================================================================
+
+  4 pages — user swipes/taps to switch between them.
+
+  ┌─────────────────── PAGE 1: WELCOME ───────────────────┐
+  │                                                          │
+  │                   ⚡ EV GUARDIAN ⚡                      │
+  │                                                          │
+  │     ┌──────────────┐        ┌──────────────┐            │
+  │     │  BANNARI     │        │  QUALCOMM    │            │
+  │     │  AMMAN       │        │  SNAPDRAGON  │            │
+  │     │  INSTITUTE   │        │  DEVELOPER   │            │
+  │     │  OF TECH.    │        │              │            │
+  │     └──────────────┘        └──────────────┘            │
+  │                                                          │
+  │              >>> TAP TO ENTER >>>                       │
+  └──────────────────────────┬───────────────────────────────┘
+                             │ tap
+                             ▼
+  ┌─────────────────── PAGE 2: LIVE SENSORS ───────────────┐
+  │                                                          │
+  │   CELL VOLTAGES:                                         │
+  │    C1: 2.959V   C2: 2.953V   C3: 2.958V   C4: 2.961V     │
+  │                                                          │
+  │   Pack Voltage: 11.835V     Imbalance: 0.008V            │
+  │   Current:      -12.257A    SoC:       26.09%            │
+  │                                                          │
+  │   TEMPERATURES:              GAS & VIBRATION:            │
+  │    T1: 119.95°C               CO:   0.524 ppm            │
+  │    T2:  97.32°C               Vib:  0.170g RMS           │
+  │    ΔT:  22.70°C               Freq: 44.69 Hz             │
+  │                                                          │
+  │              >>> TAP FOR ML PAGE >>>                    │
+  └──────────────────────────┬───────────────────────────────┘
+                             │ tap
+                             ▼
+  ┌─────────────────── PAGE 3: ML DIAGNOSIS ────────────────┐
+  │                                                          │
+  │   🔴 FAULT DETECTED                                      │
+  │                                                          │
+  │   Primary:   OVERCURRENT_DISCHARGE                       │
+  │   Secondary: OVERTEMPERATURE                              │
+  │   Class: 5      Severity: 1                              │
+  │                                                          │
+  │   SOH:  92.12%       RUL: 518 cycles                     │
+  │   Risk: ████████░░   82.25 / 100                         │
+  │                                                          │
+  │              >>> TAP FOR CHARGER >>>                    │
+  └──────────────────────────┬───────────────────────────────┘
+                             │ tap
+                             ▼
+  ┌─────────────────── PAGE 4: EACI CHARGER ────────────────┐
+  │                                                          │
+  │   ⚡ ADAPTIVE CHARGING ACTIVE                             │
+  │                                                          │
+  │   Mode:    SAFE_DERATED                                  │
+  │   Current: 5.0A (reduced from 12A)                       │
+  │   PWM:     41.7%                                         │
+  │                                                          │
+  │   WHY REDUCED:                                            │
+  │    • Battery temp 119°C (too hot for full speed)         │
+  │    • Risk score 82 (high fault probability)               │
+  │                                                          │
+  │   BENEFIT:                                                │
+  │    • Prevents thermal damage                              │
+  │    • Saves battery life                                   │
+  │                                                          │
+  │              >>> TAP FOR HOME >>>                        │
+  └──────────────────────────┬───────────────────────────────┘
+                             │
+                             ▼
+================================================================================
+ STAGE 7 — ONBOARD LED MATRIX (Built-in 13x8, STM32 GPIO — NO external module)
+================================================================================
+
+  The Arduino Uno Q has a BUILT-IN 13×8 LED matrix (104 red LEDs)
+  directly on the board. No external module needed.
+  STM32 controls it via GPIO. Visible from a distance.
+
+  Based on Risk Score from ML output:
+
+     Risk < 40                    Risk 40–79                   Risk ≥ 80
+    ──────────                   ──────────                   ──────────
+   ┌─────────────────┐          ┌─────────────────┐          ┌─────────────────┐
+   │ ○○○○○○○○○○○○○ │          │ ○○○○○○○○○○○○○ │          │ ○○○○○○○○○○○○○ │
+   │ ○○○●●●●●○○○○○ │          │ ○○○○○●●●○○○○○ │          │ ●○○○○○○○○○○○● │
+   │ ○○●○○○○○●○○○○ │          │ ○○○○○○●○○○○○○ │          │ ○●○○○○○○○○○●○ │
+   │ ○○●○○○○○●○○○○ │          │ ○○○○○○●○○○○○○ │          │ ○○●○○○○○○○●○○ │
+   │ ○○●○○○○○●○○○○ │          │ ○○○○○○●○○○○○○ │          │ ○○○●○○○○○●○○○ │
+   │ ○○●○○○○○●○○○○ │          │ ○○○○○○○○○○○○○ │          │ ○○○○●○○○●○○○○ │
+   │ ○○○●●●●●○○○○○ │          │ ○○○○○○●○○○○○○ │          │ ○○○○○●○●○○○○○ │
+   │ ○○○○○○○○○○○○○ │          │ ○○○○○○●○○○○○○ │          │ ○○○○○○●○○○○○○ │
+   └─────────────────┘          └─────────────────┘          └─────────────────┘
+    "O" = ALL OK ✅              "!" = ALERT ⚠                "X" = DANGER 🔴
+    (steady glow)                (slow blink)                 (fast blink)
+                             │
+                             ▼
+================================================================================
+ STAGE 8 — MQTT DATA PUBLISH         (QRB2210 sends to network)
+================================================================================
+
+  QRB2210 bundles everything into one message, published every 500ms.
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  TOPIC:  ev/guardian/telemetry                                    │
+  │                                                                    │
+  │  CONTAINS:                                                        │
+  │   • All cell voltages (C1, C2, C3, C4)                            │
+  │   • Current, Pack Voltage, SoC                                    │
+  │   • Temperatures (T1, T2, Delta_T)                                │
+  │   • Gas sensor (CO_PPM)                                           │
+  │   • Vibration (RMS, Peak, Freq)                                   │
+  │   • ML Output (Fault, SOH, RUL, Risk)                             │
+  │   • EACI Output (safe current, PWM, mode)                         │
+  └──────────────────────────┬─────────────────────────────────────────┘
+                             │
+             ┌───────────────┼───────────────┐
+             ▼               ▼               ▼
+      ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
+      │ WEB         │ │ MOBILE      │ │ CLOUD       │
+      │ DASHBOARD   │ │ APP         │ │ ANALYTICS   │
+      │ (laptop)    │ │ (phone)     │ │ (fleet)     │
+      └─────────────┘ └─────────────┘ └─────────────┘
+
+================================================================================
+ HARDWARE ALLOCATION SUMMARY
+================================================================================
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │   STM32 MCU (fast, real-time)   │   QRB2210 MPU (powerful)        │
+  │   ───────────────────────────   │   ───────────────────────────  │
+  │   Stage 1: Read all sensors     │   Stage 3: Run ML models        │
+  │   Stage 2: RTOS task scheduling │   Stage 4: Generate output      │
+  │   Stage 6: Drive TFT display    │   Stage 5: EACI decisions       │
+  │   Stage 7: Drive dot matrix     │   Stage 8: MQTT publish         │
+  │   + PWM output to MOSFET        │                                  │
+  │                                  │                                  │
+  │   WHY HERE:                      │   WHY HERE:                     │
+  │    • Must be instant (<1ms)     │    • Needs heavy compute        │
+  │    • Safety-critical            │    • Needs Python/ONNX          │
+  │    • Direct hardware pins       │    • Needs network stack        │
+  └──────────────────────────────────────────────────────────────────┘
+
+================================================================================
+ ONE-LINE SUMMARY
+================================================================================
+
+  SENSORS ──► STM32 reads ──► SHARED MEMORY ──► QRB2210 ML + EACI
+                                                        │
+  DOT MATRIX ◄── STM32 reads ◄── SHARED MEMORY ◄────────┘
+  TFT DISPLAY ◄──┘                     │
+  MOSFET PWM  ◄──┘                     └──► MQTT to Dashboard/Cloud
+
+================================================================================

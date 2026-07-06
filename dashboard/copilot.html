@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EV Guardian — AI Copilot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="common.css"/>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside class="hud-sidebar">
+    <div>
+      <div class="nav-brand">⚡ Guardian</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-item"><span class="icon">🌐</span> twin cockpit</a>
+        <a href="analytics.html" class="nav-item"><span class="icon">📈</span> waveforms</a>
+        <a href="models.html" class="nav-item"><span class="icon">🧠</span> ai engine</a>
+        <a href="copilot.html" class="nav-item active"><span class="icon">🤖</span> ai copilot</a>
+      </nav>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-status">
+        <span class="pill-dot"></span> System Live
+      </div>
+    </div>
+  </aside>
+
+  <!-- Content Wrapper -->
+  <div class="hud-content">
+    <header>
+      <div class="logo-container">
+        <div class="logo-glow-icon">🤖</div>
+        <div class="logo-titles">
+          <h1>AI Diagnostics Copilot</h1>
+          <p>Qualcomm Snapdragon PC Edge Platform &middot; On-Device Diagnostic LLM</p>
+        </div>
+      </div>
+      
+      <div class="status-capsules">
+        <div class="hud-pill live" id="connection-pill">
+          <div class="dot"></div>
+          <span id="connection-txt">Telemetry Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CRITICAL ALERT STRIP -->
+    <div id="alert-strip">
+      <div class="alert-icon-ring">!</div>
+      <div class="alert-details">
+        <h4 id="alert-strip-head">CRITICAL FAULT DETECTED</h4>
+        <p id="alert-strip-reason">CELL_3_VOLT_LOW(1.25V) — Local model inference flags fault</p>
+      </div>
+      <button id="diag-trigger" onclick="requestAIDiagnostics()">🤖 Run Diagnostics</button>
+    </div>
+
+    <!-- MAIN VIEWPORT GRID -->
+    <main>
+      <div class="full-page-layout">
+        
+        <!-- LLM Engineering Tuning Panel -->
+        <div class="glass-card">
+          <div class="panel-title" style="margin-bottom: 16px;">⚙️ LLM Co-Processor Tuning (Inference Parameters)</div>
+          
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
+            <!-- Model choice dropdown -->
+            <div>
+              <label style="display: block; font-family: var(--font-hud); font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Target LLM Model</label>
+              <select id="setting-model" style="width: 100%; background: rgba(3, 6, 17, 0.85); border: 1px solid var(--glass-border); border-radius: 6px; padding: 10px; font-family: var(--font-mono); font-size: 11px; color: #fff; outline: none; border-color: rgba(255,255,255,0.05);">
+                <option value="llama3" selected>Llama-3-8B-Instruct (Default)</option>
+                <option value="mistral">Mistral-7B-v0.2</option>
+                <option value="phi3">Phi-3-Mini (3.8B)</option>
+              </select>
+            </div>
+            
+            <!-- Temperature slider -->
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <label style="font-family: var(--font-hud); font-size: 9px; color: var(--text-muted); text-transform: uppercase;">Temperature (Inference Entropy)</label>
+                <span id="label-temp-val" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--neon-cyan);">0.70</span>
+              </div>
+              <input type="range" id="setting-temp" min="0.1" max="1.0" step="0.05" value="0.70" style="width: 100%; accent-color: var(--neon-cyan); height: 18px;" oninput="$$('label-temp-val').textContent = parseFloat(this.value).toFixed(2);"/>
+            </div>
+          </div>
+          
+          <!-- System Prompt override -->
+          <div style="margin-top: 16px;">
+            <label style="display: block; font-family: var(--font-hud); font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">System Instructions Override</label>
+            <textarea id="setting-system-prompt" rows="6" style="width: 100%; background: rgba(3, 6, 17, 0.85); border: 1px solid var(--glass-border); border-radius: 6px; padding: 12px; font-family: var(--font-mono); font-size: 10px; color: #fff; outline: none; resize: vertical; line-height: 1.45; border-color: rgba(255,255,255,0.05);">You are EV Guardian AI, an expert Battery Management Assistant running completely offline on an edge device.
+Your job is to analyze real-time battery telemetry and answer user questions about battery condition, safety, health, and maintenance.
+
+You specialize only in:
+1. Battery State of Health (SOH)
+2. Remaining Useful Life (RUL)
+3. Battery Life Cycle Estimation
+4. Cell Voltage Analysis
+5. Current Analysis
+6. Temperature Analysis
+7. Cell Balancing
+8. Sensor Fault Detection
+9. Thermal Runaway Detection
+10. Charging Recommendations
+11. Maintenance Recommendations
+12. Fleet Battery Analytics
+13. Battery Aging Mechanisms
+14. Battery Safety Warnings
+
+Battery Type: LiFePO4
+
+Rules:
+1. Always use the provided telemetry data.
+2. Never invent values that are not given.
+3. Distinguish between actual battery faults, sensor failures, connector issues, and thermal runaway risks.
+4. Explain your reasoning clearly and give confidence levels (High, Medium, Low).
+5. Response Format: Battery Status, Analysis, SOH, RUL, Life Cycles Remaining, Root Cause, Recommended Actions, Confidence.</textarea>
+          </div>
+        </div>
+
+        <!-- Diagnostic Output Pane -->
+        <div class="glass-card" style="flex: 1; display: flex; flex-direction: column; min-height: 380px;">
+          <div class="panel-tag-header">
+            <div class="panel-title" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span>Local LLM Diagnostic Terminal Output</span>
+              <span id="llm-status-pill" class="stack-badge" style="background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.3); color: #c084fc; font-size: 9px;">LLM READY</span>
+            </div>
+            <div class="panel-meta">Platform: Ollama &middot; GPU Offloaded</div>
+          </div>
+
+          <!-- Hardware telemetry metrics header -->
+          <div style="background: rgba(5,7,20,0.6); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.03); margin-bottom: 15px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);">
+            <div>CO-PROCESSOR MODEL: <br/><span id="meta-model-name" style="color: var(--neon-cyan)">Llama-3-8B-Instruct</span></div>
+            <div>CONTEXT LIMIT: <br/><span style="color: var(--neon-cyan)">2,048 Tokens</span></div>
+            <div>EVALUATION SPEED: <br/><span id="llm-metric-speed" style="color: var(--neon-cyan)">Idle</span></div>
+            <div>INF LATENCY: <br/><span id="llm-metric-latency" style="color: var(--neon-cyan)">N/A</span></div>
+          </div>
+
+          <!-- Console log output -->
+          <div class="ai-diag-block" id="copilot-console" style="flex: 1; font-size: 11px; line-height: 1.7; min-height: 220px;">SYSTEM DIAGNOSTIC CONSOLE READY.
+Awaiting telemetry stream to establish nominal system thresholds...
+If an anomaly is flagged, click the "🤖 Run Diagnostics" button in the alarm banner above, or use the query debugger below to prompt the edge LLM directly.</div>
+
+          <!-- Generation dynamic waves animation -->
+          <div id="llm-wave-container" style="display: none; align-items: center; justify-content: center; gap: 4.5px; height: 16px; margin: 15px 0;">
+            <span style="font-family: var(--font-mono); font-size: 9px; color: #c084fc; letter-spacing: 0.5px; margin-right: 4px; text-transform: uppercase;">LLM Generating Token Pipeline:</span>
+            <div class="llm-pulse-bar" style="animation-delay: 0.00s;"></div>
+            <div class="llm-pulse-bar" style="animation-delay: 0.15s;"></div>
+            <div class="llm-pulse-bar" style="animation-delay: 0.30s;"></div>
+            <div class="llm-pulse-bar" style="animation-delay: 0.45s;"></div>
+            <div class="llm-pulse-bar" style="animation-delay: 0.60s;"></div>
+          </div>
+        </div>
+
+        <!-- Debug Command Console prompt -->
+        <div class="glass-card">
+          <div class="panel-title" style="margin-bottom: 12px;">💻 On-Device AI Diagnostic Query Console</div>
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="debugger-input" placeholder="Inject custom debug signals (e.g. 'Explain hazards of Cell 3 reading 1.25V @ 115.2C status')" style="flex: 1; background: rgba(3, 6, 17, 0.85); border: 1px solid var(--glass-border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 11.5px; color: #fff; outline: none; transition: border-color 0.3s;" onkeydown="if(event.key==='Enter') sendDebugQuery()"/>
+            <button onclick="sendDebugQuery()" style="background: rgba(147, 51, 234, 0.1); border: 1px solid rgba(147, 51, 234, 0.35); border-radius: 8px; padding: 0 20px; font-family: var(--font-hud); font-size: 10px; color: #c084fc; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.25s;">Send</button>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <footer>
+      <div>EV GUARDIAN HUD v5.0</div>
+      <div class="tech-stack-row">
+        <span class="stack-badge">Snapdragon X PC</span>
+        <span class="stack-badge">Ollama REST API</span>
+        <span class="stack-badge">Local GPU Acceleration</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Helper function
+    const $$ = id => document.getElementById(id);
+
+    // Configuration
+    const WS_URL = "ws://localhost:8887/";
+    const HTTP_URL = "http://localhost:8766";
+    let ws = null;
+    let reconnectTimer = null;
+    let lastFaultReason = "";
+    let isGenerating = false;
+
+    async function queryLLMAgent(promptString) {
+      if (isGenerating) return;
+      isGenerating = true;
+
+      const view = $$('copilot-console');
+      const statusPill = $$('llm-status-pill');
+      
+      // Update HUD to THINKING state
+      statusPill.textContent = 'THINKING';
+      statusPill.style.background = 'rgba(239, 68, 68, 0.15)';
+      statusPill.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+      statusPill.style.color = '#ef4444';
+      
+      $$('llm-wave-container').style.display = 'flex';
+      $$('llm-metric-speed').textContent = 'Processing...';
+      $$('llm-metric-latency').textContent = 'Pending...';
+      
+      // Get tuning parameters from UI
+      const model = $$('setting-model').value;
+      const displayModel = $$('setting-model').options[$$('setting-model').selectedIndex].text.split(' ')[0];
+      $$('meta-model-name').textContent = displayModel;
+      
+      const temp = $$('setting-temp').value;
+      const systemPrompt = $$('setting-system-prompt').value;
+
+      view.textContent = `COMPILING TELEMETRY CONTEXT...\nDISPATCHING ENVELOPE (Model=${model}, Temp=${temp}) TO LOCAL ACCELERATION PIPELINE...\n\n`;
+
+      const fetchStart = performance.now();
+      let response;
+      let body;
+      let fallbackMode = false;
+      
+      try {
+        const urlCmd = `${HTTP_URL}/diagnose?reason=${encodeURIComponent(promptString)}&model=${encodeURIComponent(model)}&temperature=${encodeURIComponent(temp)}&system_prompt=${encodeURIComponent(systemPrompt)}`;
+        response = await fetch(urlCmd);
+        body = await response.json();
+      } catch (err) {
+        fallbackMode = true;
+      }
+
+      let diagnosisText = "";
+      let elapsedMs = 0;
+      
+      if (fallbackMode) {
+        // Mock compile time delay
+        await new Promise(r => setTimeout(r, 1200));
+        elapsedMs = performance.now() - fetchStart;
+        
+        if (promptString.toLowerCase().includes("cell 3") || promptString.toLowerCase().includes("cell_3") || promptString.toLowerCase().includes("disconnect")) {
+          diagnosisText = `[OFFLINE DEMO SIMULATION (Model: ${displayModel})]\nCRITICAL ANOMALY ALERT: Cell 3 reported voltage drop of 1.25V with critical temperature rise to 115.2C.\n\nActionable Diagnostics:\n1. Emergency shutdown sequence queued in RTOS kernel.\n2. Disconnect Cell 3 terminal wire to prevent thermal runaway cascade.\n3. Run active coolant pumps at 100% capacity to dissipate hotspot.\n4. Check physical sensor connectors; readings indicate a high probability of wire disconnect/contact resistance.`;
+        } else {
+          diagnosisText = `[OFFLINE DEMO SIMULATION (Model: ${displayModel})]\nSYSTEM RESPONDING TO CUSTOM SIGNAL: "${promptString}"\n\nDiagnostic Evaluation:\n1. Telemetry variables remain within manageable stress capacities.\n2. Active balance cycle has been recommended for verification.\n3. NPU co-processor status green. No immediate load restriction required.`;
+        }
+      } else {
+        elapsedMs = performance.now() - fetchStart;
+        diagnosisText = body.diagnosis || 'Diagnosis generation failed.';
+      }
+
+      const elapsedSec = elapsedMs / 1000;
+      const tokenCount = Math.round(diagnosisText.length / 4); // estimate token count
+      const tokensPerSec = (tokenCount / elapsedSec).toFixed(1);
+      
+      $$('llm-metric-speed').textContent = `${tokensPerSec} t/s`;
+      $$('llm-metric-latency').textContent = `${elapsedSec.toFixed(2)}s`;
+      
+      view.textContent = "";
+      
+      // Update HUD to STREAMING state
+      statusPill.textContent = 'STREAMING';
+      statusPill.style.background = 'rgba(168, 85, 247, 0.15)';
+      statusPill.style.borderColor = 'rgba(168, 85, 247, 0.4)';
+      statusPill.style.color = '#c084fc';
+      
+      // Typewriter output
+      let charIndex = 0;
+      const cursorSpan = document.createElement('span');
+      cursorSpan.className = 'typing-effect';
+      view.appendChild(cursorSpan);
+
+      function typeCharacter() {
+        if (charIndex < diagnosisText.length) {
+          cursorSpan.textContent += diagnosisText.charAt(charIndex);
+          charIndex++;
+          view.scrollTop = view.scrollHeight;
+          setTimeout(typeCharacter, 8);
+        } else {
+          cursorSpan.className = ''; // Remove blinking text caret
+          
+          // Reset to ready
+          statusPill.textContent = 'LLM READY';
+          statusPill.style.background = 'rgba(147, 51, 234, 0.1)';
+          statusPill.style.borderColor = 'rgba(147, 51, 234, 0.3)';
+          statusPill.style.color = '#c084fc';
+          $$('llm-wave-container').style.display = 'none';
+          isGenerating = false;
+        }
+      }
+      typeCharacter();
+    }
+
+    async function requestAIDiagnostics() {
+      if (!lastFaultReason) return;
+      await queryLLMAgent(lastFaultReason);
+    }
+
+    async function sendDebugQuery() {
+      const input = $$('debugger-input');
+      const val = input.value.trim();
+      if (!val) return;
+      input.value = "";
+      await queryLLMAgent(val);
+    }
+
+    function handleTelemetryFrame(data) {
+      const isAnomalous = data.is_anomaly;
+      if (isAnomalous) {
+        lastFaultReason = data.alert_reason || 'MODEL_ANOMALY';
+        $$('alert-strip-reason').textContent = `${lastFaultReason} — Inference running latency: 1.2ms`;
+        $$('alert-strip').classList.add('active');
+      } else {
+        $$('alert-strip').classList.remove('active');
+      }
+    }
+
+    function establishWebSocket() {
+      if(ws && ws.readyState < 2) return;
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        $$('connection-pill').className = 'hud-pill live';
+        $$('connection-txt').textContent = 'Live telemetry';
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        if (offlineSimulationTimer) { clearInterval(offlineSimulationTimer); offlineSimulationTimer = null; }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          handleTelemetryFrame(payload);
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        $$('connection-pill').className = 'hud-pill dead';
+        $$('connection-txt').textContent = 'Link Offline (Reconnecting…)';
+        reconnectTimer = setTimeout(establishWebSocket, 3000);
+        if (!offlineSimulationTimer) triggerOfflineDemoSync();
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    /* ── Offline Backup Simulation ── */
+    let offlineSimulationTimer = null;
+    let cycleCounter = 0;
+
+    function triggerOfflineDemoSync() {
+      if (offlineSimulationTimer) return;
+      offlineSimulationTimer = setInterval(() => {
+        cycleCounter++;
+        const isFaultState = (Math.floor(cycleCounter / 100) % 2) === 1;
+
+        let voltages, temps, isAnomaly, alert_reason;
+        if (isFaultState) {
+          voltages = [3.81, 3.82, 1.25, 3.82];
+          temps = [34.2, 34.3, 115.2, 34.1];
+          isAnomaly = true;
+          alert_reason = "CELL_3_VOLT_LOW(1.25V)|CELL_3_TEMP_HIGH(115.2C)";
+        } else {
+          voltages = [3.82, 3.81, 3.80, 3.83];
+          temps = [34.1, 34.3, 34.2, 34.4];
+          isAnomaly = false;
+          alert_reason = "";
+        }
+
+        handleTelemetryFrame({
+          voltages: voltages,
+          is_anomaly: isAnomaly,
+          alert_reason: alert_reason
+        });
+      }, 100);
+    }
+
+    // Init
+    establishWebSocket();
+  </script>
+</body>
+</html>
