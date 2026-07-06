@@ -1,0 +1,13 @@
+# Core Data Processing
+numpy>=1.22.0
+pandas>=1.4.0
+
+# Machine Learning & Inference
+scikit-learn>=1.0.0
+torch>=2.0.0
+onnx>=1.13.0
+onnxruntime>=1.14.0
+joblib>=1.2.0
+
+# System Resources
+psutil>=5.9.0
