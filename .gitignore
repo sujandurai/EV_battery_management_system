@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -17,3 +18,37 @@ ENV/
 # OS-specific
 .DS_Store
 Thumbs.db
+=======
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database files (large, regeneratable)
+*.db
+*.db-shm
+*.db-wal
+
+# ONNX model binaries (large, add back if needed)
+# *.onnx
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+>>>>>>> master

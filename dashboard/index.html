@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EV Guardian — Digital Twin Cockpit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="common.css"/>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside class="hud-sidebar">
+    <div>
+      <div class="nav-brand">⚡ Guardian</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-item active"><span class="icon">🌐</span> twin cockpit</a>
+        <a href="analytics.html" class="nav-item"><span class="icon">📈</span> waveforms</a>
+        <a href="models.html" class="nav-item"><span class="icon">🧠</span> ai engine</a>
+        <a href="copilot.html" class="nav-item"><span class="icon">🤖</span> ai copilot</a>
+      </nav>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-status">
+        <span class="pill-dot"></span> System Live
+      </div>
+    </div>
+  </aside>
+
+  <!-- Content Wrapper -->
+  <div class="hud-content">
+    <header>
+      <div class="logo-container">
+        <div class="logo-glow-icon">🌐</div>
+        <div class="logo-titles">
+          <h1>Digital Twin Cockpit</h1>
+          <p>Qualcomm Snapdragon PC Edge Platform &middot; Live 3D Cell Monitoring</p>
+        </div>
+      </div>
+      
+      <div class="status-capsules">
+        <div class="hud-pill live" id="connection-pill">
+          <div class="dot"></div>
+          <span id="connection-txt">Telemetry Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CRITICAL ALERT STRIP -->
+    <div id="alert-strip">
+      <div class="alert-icon-ring">!</div>
+      <div class="alert-details">
+        <h4 id="alert-strip-head">CRITICAL FAULT DETECTED</h4>
+        <p id="alert-strip-reason">CELL_3_VOLT_LOW(1.25V) — Local model inference flags fault</p>
+      </div>
+      <button id="diag-trigger" onclick="location.href='copilot.html'">🤖 Diagnose</button>
+    </div>
+
+    <!-- MAIN VIEWPORT GRID -->
+    <main>
+      <div class="split-page-layout">
+        
+        <!-- LEFT: 3D Digital Twin Viewer -->
+        <div class="dashboard-panel">
+          <div class="glass-card" id="twin-panel-card" style="height: 100%; display: flex; flex-direction: column;">
+            <div class="panel-tag-header">
+              <div class="panel-title">3D Battery Pack Twin</div>
+              <div class="panel-meta">
+                Pack Volt: <strong id="vpack-disp" style="color:var(--neon-cyan)">—</strong> V &nbsp;|&nbsp; 
+                Est. SOC: <strong id="soc-disp" style="color:var(--neon-green)">—</strong> %
+              </div>
+            </div>
+            
+            <div id="digital-twin-box" style="flex: 1; min-height: 480px;">
+              <canvas id="webgl-canvas"></canvas>
+              <div class="digital-twin-hud-overlay">
+                CAM: Orbit Control Active | NPU Acceleration: <span style="color: var(--neon-cyan)">QNN Hexagon HTP</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT: System Logging & Status Panel -->
+        <div class="hud-control-column">
+          
+          <!-- Quick Status Cards -->
+          <div class="hud-row-metrics">
+            <div class="hud-stat-box">
+              <div class="desc">Frame Packets</div>
+              <div class="value" id="stats-pkts">0</div>
+              <div class="sub-val">10Hz Ingestion</div>
+            </div>
+            <div class="hud-stat-box" id="stat-box-anom">
+              <div class="desc">Fault Events</div>
+              <div class="value" id="stats-anoms">0</div>
+              <div class="sub-val" id="stats-anomaly-txt">Stable</div>
+            </div>
+          </div>
+
+          <!-- Event Ledger Console -->
+          <div class="glass-card" style="flex: 1; display: flex; flex-direction: column;">
+            <div class="panel-tag-header" style="margin-bottom: 12px;">
+              <div class="panel-title">System Event Ledger</div>
+              <div class="panel-meta">Console logs</div>
+            </div>
+            <div class="events-scroller" id="event-logs-wrap" style="flex: 1; overflow-y: auto;"></div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <footer>
+      <div>EV GUARDIAN HUD v5.0</div>
+      <div class="tech-stack-row">
+        <span class="stack-badge">Snapdragon X PC</span>
+        <span class="stack-badge">Zephyr RTOS</span>
+        <span class="stack-badge">Three.js</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Load WebGL Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // Helper function
+    const $$ = id => document.getElementById(id);
+
+    // Configuration
+    const WS_URL = "ws://localhost:8887/";
+    let ws = null;
+    let reconnectTimer = null;
+    let lastFaultReason = "";
+    let countPackets = 0;
+    let countAnomalies = 0;
+
+    /* ── Three.js 3D Twin Setups ── */
+    const container = $$('digital-twin-box');
+    const canvas = $$('webgl-canvas');
+    
+    const scene = new THREE.Scene();
+    scene.background = null; 
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(40, container.clientWidth / container.clientHeight, 0.1, 100);
+    camera.position.set(10, 8, 12);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(container.clientWidth, container.clientHeight);
+
+    // Controls
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 25;
+
+    // Ambient Lighting
+    const ambientLight = new THREE.AmbientLight(0x0f172a, 1.5);
+    scene.add(ambientLight);
+
+    // Neon Blue Directional Light
+    const dirLight = new THREE.DirectionalLight(0x00f0ff, 1.8);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    // Neon Violet Accent Light
+    const pointLight = new THREE.PointLight(0x9333ea, 2.5, 20);
+    pointLight.position.set(-5, 3, -5);
+    scene.add(pointLight);
+
+    // Create Battery Cells Grp
+    const cellGroup = new THREE.Group();
+    scene.add(cellGroup);
+
+    const cellsGeom = new THREE.BoxGeometry(1.6, 2.8, 1.6);
+    const cellMaterials = [];
+    const cellMeshes = [];
+
+    // Construct 4 battery cells
+    for (let c = 0; c < 4; c++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x00f0ff,
+        roughness: 0.15,
+        metalness: 0.8,
+        emissive: 0x00f0ff,
+        emissiveIntensity: 0.08,
+        transparent: true,
+        opacity: 0.85
+      });
+      cellMaterials.push(mat);
+
+      const mesh = new THREE.Mesh(cellsGeom, mat);
+      // Row arrangement layout
+      mesh.position.set((c - 1.5) * 2.2, 0, 0);
+      cellMeshes.push(mesh);
+      cellGroup.add(mesh);
+    }
+
+    // Add a structural outer casing wrapper
+    const casingGeom = new THREE.BoxGeometry(9.2, 3.2, 2.2);
+    const casingMat = new THREE.MeshStandardMaterial({
+      color: 0x1e293b,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.25
+    });
+    const casingMesh = new THREE.Mesh(casingGeom, casingMat);
+    scene.add(casingMesh);
+
+    // Animate Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      cellGroup.rotation.y += 0.003;
+      casingMesh.rotation.y = cellGroup.rotation.y;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Resize handler
+    window.addEventListener('resize', () => {
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    /* ── Live Updates ── */
+    function updateThreeJSData(voltages, temps, isAnomaly) {
+      for (let i = 0; i < 4; i++) {
+        const v = voltages[i] || 0.0;
+        const t = temps[i] || 0.0;
+        const mesh = cellMeshes[i];
+        const mat = cellMaterials[i];
+
+        if (isAnomaly && (v < 3.0 || t > 45.0)) {
+          mat.color.setHex(0xff3366);
+          mat.emissive.setHex(0xff3366);
+          mat.emissiveIntensity = 0.55 + Math.sin(Date.now() * 0.008) * 0.15;
+          mesh.scale.set(1.05, 1.05, 1.05);
+        } else {
+          mat.color.setHex(0x00ff87);
+          mat.emissive.setHex(0x00ff87);
+          mat.emissiveIntensity = 0.15;
+          mesh.scale.set(1.0, 1.0, 1.0);
+        }
+      }
+    }
+
+    function appendToEventLedger(type, text, timeString) {
+      const list = $$('event-logs-wrap');
+      const item = document.createElement('div');
+      item.className = `log-item ${type === 'incident' ? 'incident' : ''}`;
+      item.innerHTML = `
+        <div class="badge"></div>
+        <div class="body">${text}</div>
+        <div class="time">${timeString || new Date().toLocaleTimeString()}</div>
+      `;
+      list.insertBefore(item, list.firstChild);
+      while (list.children.length > 40) {
+        list.removeChild(list.lastChild);
+      }
+    }
+
+    function handleTelemetryFrame(data) {
+      countPackets = data.packet_count || countPackets + 1;
+      countAnomalies = data.anomaly_count || countAnomalies;
+
+      $$('stats-pkts').textContent = countPackets.toLocaleString();
+      $$('stats-anoms').textContent = countAnomalies;
+      $$('stats-anoms').style.color = countAnomalies > 0 ? 'var(--neon-red)' : 'var(--text-main)';
+      $$('stats-anomaly-txt').textContent = countAnomalies > 0 ? `${countAnomalies} EVENTS LOGGED` : 'HEALTHY STATUS';
+      $$('stats-anomaly-txt').style.color = countAnomalies > 0 ? 'var(--neon-red)' : 'var(--text-muted)';
+      
+      const voltages = data.voltages || [0,0,0,0];
+      const temps = data.temperatures || [0,0,0,0];
+      const packVolts = voltages.reduce((a, b) => a + b, 0);
+      const socEst = Math.min(100, Math.max(0, ((packVolts / 4 - 3.0) / (4.2 - 3.0) * 100)));
+
+      $$('vpack-disp').textContent = packVolts.toFixed(2);
+      $$('soc-disp').textContent = socEst.toFixed(0);
+
+      updateThreeJSData(voltages, temps, data.is_anomaly);
+
+      const isAnomalous = data.is_anomaly;
+      if (isAnomalous) {
+        lastFaultReason = data.alert_reason || 'MODEL_ANOMALY';
+        $$('alert-strip-reason').textContent = `${lastFaultReason} — Inference running latency: 1.2ms`;
+        $$('alert-strip').classList.add('active');
+        $$('twin-panel-card').classList.add('alert-active');
+        $$('stat-box-anom').classList.add('anomaly-warning');
+      } else {
+        $$('alert-strip').classList.remove('active');
+        $$('twin-panel-card').classList.remove('alert-active');
+        $$('stat-box-anom').classList.remove('anomaly-warning');
+      }
+
+      const logTimeVal = new Date(data.timestamp || Date.now()).toLocaleTimeString();
+      if (isAnomalous) {
+        appendToEventLedger('incident', `FAULT TRIGGERED: ${lastFaultReason}`, logTimeVal);
+      } else if (countPackets % 15 === 0) {
+        appendToEventLedger('info', `FRAME INGESTED #${countPackets} | Pack=${packVolts.toFixed(2)}V | SOH=${(data.soh_pct || 100).toFixed(1)}%`, logTimeVal);
+      }
+    }
+
+    function establishWebSocket() {
+      if(ws && ws.readyState < 2) return;
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        $$('connection-pill').className = 'hud-pill live';
+        $$('connection-txt').textContent = 'Live telemetry';
+        appendToEventLedger('info', 'Secure WebSocket connection established to Snapdragon Edge-API.');
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        if (offlineSimulationTimer) { clearInterval(offlineSimulationTimer); offlineSimulationTimer = null; }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          handleTelemetryFrame(payload);
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        $$('connection-pill').className = 'hud-pill dead';
+        $$('connection-txt').textContent = 'Link Offline (Reconnecting…)';
+        reconnectTimer = setTimeout(establishWebSocket, 3000);
+        if (!offlineSimulationTimer) triggerOfflineDemoSync();
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    /* ── Offline Backup Simulation ── */
+    let offlineSimulationTimer = null;
+    let cycleCounter = 0;
+
+    function triggerOfflineDemoSync() {
+      if (offlineSimulationTimer) return;
+      appendToEventLedger('info', 'Local backend connection down. Starting offline fallback twin simulator (10Hz).');
+      
+      offlineSimulationTimer = setInterval(() => {
+        cycleCounter++;
+        const isFaultState = (Math.floor(cycleCounter / 100) % 2) === 1;
+        const timestamp = Date.now();
+
+        let voltages, temps, isAnomaly, alert_reason, current_a;
+        if (isFaultState) {
+          voltages = [3.81, 3.82, 1.25, 3.82];
+          temps = [34.2, 34.3, 115.2, 34.1];
+          isAnomaly = true;
+          alert_reason = "CELL_3_VOLT_LOW(1.25V)|CELL_3_TEMP_HIGH(115.2C)";
+          current_a = -12.4;
+        } else {
+          voltages = [3.82, 3.81, 3.80, 3.83];
+          temps = [34.1, 34.3, 34.2, 34.4];
+          isAnomaly = false;
+          alert_reason = "";
+          current_a = -1.6;
+        }
+
+        handleTelemetryFrame({
+          packet_count: cycleCounter,
+          anomaly_count: Math.floor(cycleCounter / 200),
+          voltages: voltages,
+          temperatures: temps,
+          is_anomaly: isAnomaly,
+          alert_reason: alert_reason,
+          current_a: current_a,
+          soh_pct: isFaultState ? 24.5 : 94.2,
+          timestamp: timestamp
+        });
+      }, 100);
+    }
+
+    // Init
+    establishWebSocket();
+  </script>
+</body>
+</html>

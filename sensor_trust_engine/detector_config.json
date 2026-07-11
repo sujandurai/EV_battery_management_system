@@ -1,0 +1,15 @@
+{
+    "strategy": 2,
+    "scaler_type": "standard",
+    "feature_set": "reduced",
+    "latent_dim": 16,
+    "loss_type": "unweighted",
+    "n_estimators": 200,
+    "contamination": 0.05,
+    "max_features": 1.0,
+    "max_samples": 0.8,
+    "f1": 0.9300083849122784,
+    "fpr": 0.04524422879723883,
+    "roc": 0.9790988436517503,
+    "smoothing_strategy": "moving_average"
+}

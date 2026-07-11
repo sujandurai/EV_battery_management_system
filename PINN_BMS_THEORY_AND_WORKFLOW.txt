@@ -1,0 +1,166 @@
+================================================================================
+          PINN-BMS: INPUTS, OUTPUTS, THEORY, AND WORKFLOW GUIDE
+================================================================================
+
+This document lays out the exact working principle, inputs, outputs, and the 
+step-by-step workflow of the Physics-Informed Neural Network (PINN) Battery Twin.
+
+Use this as your source of truth for study, development, and hackathon pitches.
+
+================================================================================
+1. EXECUTIVE SUMMARY: WHAT IS PINN-BMS?
+================================================================================
+A normal BMS only monitors surface values (like: "the battery temperature is 
+119°C"). It cannot tell you what is failing chemically inside the cell.
+PINN-BMS uses the Snapdragon X NPU to estimate the invisible, internal physical 
+degradation states of the battery (like active material loss and lithium loss) 
+in real-time (<3ms) using only surface measurements sent via MQTT.
+
+================================================================================
+2. THE INPUTS (Dynamic Telemetry from MQTT)
+================================================================================
+Every 100 milliseconds, the Arduino Uno Q reads and sends exactly 9 variables. 
+These are the ONLY inputs the NPU model needs:
+
+  Input Name   Quantity   Physical Units   What it tells the AI
+  V1           Cell 1     Volts (V)        Voltage fluctuations indicate individual 
+  V2           Cell 2     Volts (V)        cell charge profiles and internal resistance.
+  V3           Cell 3     Volts (V)
+  V4           Cell 4     Volts (V)
+  ──────────────────────────────────────────────────────────────────────────────
+  I_total      Pack       Amperes (A)      Continuous pack load. Negative means
+                                           discharging, positive means charging.
+  ──────────────────────────────────────────────────────────────────────────────
+  T1           Temp 1     Celsius (°C)     Heat profiles at the terminal ends of the 
+  T2           Temp 2     Celsius (°C)     battery pack. Indicates gradient gaps.
+  ──────────────────────────────────────────────────────────────────────────────
+  Vib_RMS      Pack       g-force (g)      Physical vibrations/shocks. Indicates
+                                           mechanical stress on mechanical mounts.
+  ──────────────────────────────────────────────────────────────────────────────
+  Gas          Pack       ppm (parts/mil)  MQ-2 sensor outgassing. Detects vapor
+                                           leaks from electrolyte degradation.
+
+================================================================================
+3. THE OUTPUTS (Electrochemistry Estimations)
+================================================================================
+The PINN outputs 3 internal health values that cannot be measured directly. 
+These represent actual chemical state indicators:
+
+  Output Name   Unit   Interpretation       What it represents in the cell
+  LLI           %      Loss of Lithium      The active lithium ions that are permanently 
+                       Inventory            trapped in deposits and cannot transfer power anymore.
+                       (Range: 0% - 100%)   Directly causes permanent Capacity Loss.
+  ──────────────────────────────────────────────────────────────────────────────
+  LAM           %      Loss of Active       The physical breakdown, decay, or cracking 
+                       Material             of the graphite anode or metal cathode structures. 
+                       (Range: 0% - 100%)   Directly reduces maximum Peak Power.
+  ──────────────────────────────────────────────────────────────────────────────
+  R_sei         Ohms   SEI Layer Growth     The thickness and electrical resistance of the 
+                       Resistance           Solid-Electrolyte Interphase layer (a crust that
+                       (Range: ~0.015 - 5)  grows on the anode), causing the cell to run hotter.
+
+================================================================================
+4. THE THEORY: HOW ARE INPUTS MAPPED TO OUTPUTS?
+================================================================================
+The PINN contains weight variables trained to model three core physical equations:
+
+┌────────────────────────┐
+│ A. Volts & Current     │  ──► Calculating Overpotential (η):
+│                        │      η = Voltage - OCV_Reference - (Current * R_sei)
+└────────────────────────┘
+  The NPU compares measured cell voltage to a nominal Open Circuit Voltage (OCV) 
+  reference. By matching the overpotential (η) changes with current variations, 
+  the model calculates exchange current density changes inside the cell. 
+  -> This is governed by Butler-Volmer Kinetics:
+     I = I0 * [exp(alpha * F * η / RT) - exp(-beta * F * η / RT)]
+  -> When exchange current density drops permanently, the NPU outputs an LLI increase.
+
+┌────────────────────────┐
+│ B. Temps & Current     │  ──► Solid-State Diffusion Speed (D_s):
+│                        │      D_s(T) = D_ref * exp(-E_act / R * T_avg)
+└────────────────────────┘
+  Lithium ions have to move inside the active material particles (Fick's 2nd Law 
+  of Diffusion). The speed of this movement (D_s) drops exponentially at cold 
+  temperatures and accelerates at warm temperatures (obeying the Arrhenius relationship).
+  -> If the current (I) is high but temperatures (T) indicate slow diffusion, 
+      the model knows that physical stress is causing micro-cracking in the cell.
+  -> This mechanical stress directly leads to an increase in the LAM output.
+
+┌────────────────────────┐
+│ C. Vibration & Gas     │  ──► Mechanical & Venting Penalization:
+│                        │      R_sei Growth Rate = f(Gas PPM, Vibration g-force)
+└────────────────────────┘
+  - Physical vibration stresses the cell mechanically, accelerating the cracking 
+    of the protective SEI crust.
+  - Electrolyte outgassing (Gas PPM) indicates that chemical decomposition has started.
+  - The model feeds these factors into the SEI resistance layer equations, 
+    gradually raising the predicted R_sei output value.
+
+================================================================================
+5. THE FULL WORKFLOW (Tick-by-Tick Lifecycle)
+================================================================================
+
+Every single 100ms cycle follows this process:
+
+  ┌───────────────┐
+  │  Step 1: Read │  --> Arduino Uno Q ADC pin measurements (Voltages, Current, 
+  │    Sensors    │      Temperatures, Vibration, Gas).
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 2: SRAM  │  --> Zephyr RTOS writes the raw readings to Shared SRAM 
+  │     Write     │      memory ataddress 0x20000000.
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 3: MQTT  │  --> QRB2210 Linux core reads SRAM, formats the telemetry 
+  │    Publish    │      into a JSON packet, and publishes to topic "ev/telemetry".
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 4: NPU   │  --> Snapdragon X python backend (backend.py) receives the 
+  │   Inference   │      JSON packet, extracts the 9 values, and feeds them into the 
+  │               │      ONNX PINN Model running on the Hexagon NPU.
+  └───────┬───────┘
+          │
+          ├──► Runs model in <1.9ms (computes LLI, LAM, R_sei).
+          ▼
+  ┌───────────────┐
+  │ Step 5: Check │  --> If LLI > 20% or LAM > 15%, the local LLM generates plain 
+  │   Diagnostics │      conversational advice for the EV owner dashboard.
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 6: MQTT  │  --> The PC publishes physical safety limits back to the 
+  │    Return     │      topic "ev/control/pinn".
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 7: SRAM  │  --> QRB2210 writes the safety limits to target SRAM ranges 
+  │    Feedback   │      (0x20000010: Charge PWM, 0x20000011: Throttle PWM).
+  └───────┬───────┘
+          │
+          ▼
+  ┌───────────────┐
+  │ Step 8: Apply │  --> Arduino Uno Q reads SRAM, adjusts the physical MOSFET 
+  │     PWM       │      PWM gates, throttling charging speed or motor current to 
+  │               │      prevent LLI/LAM degradation from running further.
+  └───────────────┘
+
+================================================================================
+6. HACKATHON ELEVATOR PITCH STATEMENT
+================================================================================
+"We have built a Physics-Informed Neural Network (PINN) battery twin that runs 
+on the Snapdragon X PC NPU in under 3 milliseconds. By processing only 9 raw 
+MQTT signals (voltages, current, temperature, gas, vibration) sent from the 
+Arduino Uno Q, the NPU runs complex electrochemistry equations (Butler-Volmer 
+charge rates and Fickian Diffusion models) directly inside its weights. 
+It estimates invisible cell internal states—Loss of Lithium (LLI) and Loss of 
+Active Material (LAM)—allowing the vehicle to dynamically adjust its charging 
+and driving limits offline to save the battery before degradation occurs."
+================================================================================

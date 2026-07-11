@@ -1,0 +1,59 @@
+================================================================================
+EV GUARDIAN AI: THE SIMPLE, LAYPERSON'S SYSTEM BLUEPRINT
+================================================================================
+
+Sometimes technical jargon like "RTOS", "NPU", "GATT", and "ONNX" gets in the 
+way of understanding how the system actually works. Here is the entire system 
+explained using simple real-world analogies:
+
+--------------------------------------------------------------------------------
+1. THE CORE ANALOGY
+--------------------------------------------------------------------------------
+• THE SENSORS    = The Eyes and Ears (feeling the heat, voltage, and shakes).
+• THE FILTERS    = The Noise Eraser (rubbing out static/spikes from bumps).
+• THE BRIDGE     = The Internal Messenger (passing data from sensors to network).
+• THE GATEWAY    = The Mailbox (sending data to the PC, or caching it offline).
+• THE CAR PC     = The Local Doctor (making split-second decisions inside the car).
+• THE MOBILE APP = The Dashboard Light (showing dials or sounding alarms to driver).
+• THE CLOUD      = The Central Hospital (collecting records to make the medicine better).
+
+--------------------------------------------------------------------------------
+2. THE SIMPLE STEP-BY-STEP DATA FLOW
+--------------------------------------------------------------------------------
+
+[ THE BATTERY SENSORS ]
+- Continuously measures: How hot is the battery? Are the voltages normal?
+  Is there gas leaking? Is the car shaking?
+        │
+        ▼
+[ THE NOISE ERASER (DSP Filter) ]
+- Keeps the system from panicking. If a bump on the road causes a tiny voltage 
+  spike for a microsecond, the filter rubs it out so there is no false alarm.
+        │
+        ▼
+[ THE INTERCOM MESSENGER (Bridge) ]
+- Hands the clean, noise-free numbers over to the networking chip on the card.
+        │
+        ▼
+[ THE MAILBOX BOARD (MPU Gateway) ]
+- Wraps the numbers nicely to travel over Wi-Fi.
+- If Wi-Fi is working: Mails it straight to the Car PC.
+- If Wi-Fi is down: Pockets the mail in a safe storage locker (eMMC cache) 
+  and mails it later when the car connects to Wi-Fi.
+        │
+        ▼
+[ THE LOCAL DOCTOR (Snapdragon PC Engine) ]
+- The brain of the car. It uses built-in smart brain hardware (Hexagon NPU).
+- It analyzes the data in less than 1.2ms.
+- It asks: "Is Cell 3 running low because it is broken, or just because a wire 
+  vibrated loose?" 
+        │
+        ▼
+    ┌───────────────────────────┴───────────────────────────┐
+    ▼ (If everything is Healthy)                            ▼ (If danger/anomaly is found!)
+[ SCREEN UPDATER (WebSockets) ]                  [ THE CRITICAL ALARM SIGNAL ]
+- Updates the 3D car graphic on screen.          1. Sends an emergency signal.
+- Updates the dials on your phone.               2. The Arduino screen starts 
+- Sends daily summaries to the Cloud                 flashing a red warning sign.
+  Hospital to study battery health.              3. Your phone vibrates and sounds
+                                                    a loud warning alarm.

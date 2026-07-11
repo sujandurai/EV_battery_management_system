@@ -1,0 +1,18 @@
+{
+    "architecture": "LSTMAttention",
+    "sequence_length": 40,
+    "hidden_size": 256,
+    "num_layers": 1,
+    "dropout": 0.3,
+    "learning_rate": 0.001,
+    "loss_function": "CE",
+    "optimizer": "RMSprop",
+    "scheduler": "CosineAnnealingLR",
+    "batch_size": 128,
+    "gradient_clipping": 5.0,
+    "validation_macro_f1": 0.9090865715708691,
+    "validation_accuracy": 0.9124,
+    "validation_precision": 0.882296672143059,
+    "validation_recall": 0.9569061830748423,
+    "smoothing_strategy": "Strategy A"
+}

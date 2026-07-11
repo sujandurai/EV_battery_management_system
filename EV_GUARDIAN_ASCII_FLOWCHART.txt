@@ -1,0 +1,78 @@
+[ PHYSICAL SENSORS ]
+   ├── Cell 1-4 Voltage (Analog Voltages) ────┐
+   ├── Current Sensor   (Analog Voltage) ─────┼──> [ Zephyr ADC Driver ] (Analog to Digital)
+   ├── Temperature      (Analog Voltage) ─────┤
+   ├── Gas Sensor       (Analog Voltage) ─────┘
+   └── Vibration Sensor (Digital I2C Data) ──────> [ Zephyr I2C Driver ]
+                                                          │
+                                                          ▼
+                                            [ Zephyr TASK Thread 1 ]
+                                            Reads all sensors every 100ms
+                                                          │
+                                                          ▼
+                                            [ TinyML / Filtering ]
+                                            Spike and Noise Reduction filter
+                                                          │
+                                                          ▼
+                                            [ Zephyr TASK Thread 2 ]
+                                            Formats data & writes to RPC Bridge
+                                                          │
+                                                          ▼
+                                            [ Qualcomm MPU Gateway (QRB2210) ]
+                                            Pulls telemetry from Bridge (every 100ms)
+                                                          │
+                        ┌─────────────────────────────────┴─────────────────────────────────┐
+                        ▼ (Normal - Wi-Fi Active)                                           ▼ (Connection Lost)
+              [ Wi-Fi / MQTT Publisher ]                                          [ Local eMMC Storage Cache ]
+              Publishes JSON payload to topic                                     Store-and-forward caching
+              "ev/sensor/telemetry"                                               Logs data values locally
+                        │                                                                   │
+                        ▼                                                                   ▼ (When wifi restores)
+              [ Local Mosquitto Broker ] <──────────────────────────────────────────────────┘
+              Runs on Snapdragon X PC (Port 1883)
+                        │
+                        ▼
+              [ Snapdragon X PC Backend (backend.py) ]
+              1. Ingests raw JSON data
+              2. Computes 1x8 telemetry array: [C1, C2, C3, C4, Curr, Temp, Vib, Gas]
+                        │
+                        ▼
+      ┌─────────────────┴───────────────────────────────────────────────────────────────────┐
+      │              LOCAL AI INFERENCE ENGINE (Hexagon NPU - 45 TOPS)                      │
+      │  Uses ONNX Runtime with Qualcomm QNN Execution Provider (QNN EP)                    │
+      ├───────────────────────────────────────────┬─────────────────────────────────────────┤
+      │          [ Sensor Trust Model ]           │          [ State of Health Model ]      │
+      │          Assesses signal integrity        │          Estimates capacity retention   │
+      │          Outputs: Trust Score per Cell    │          Outputs: SOH %                 │
+      └─────────────────┬─────────────────────────┴─────────────────┬───────────────────────┘
+                        │                                           │
+                        ▼ (Trust Score, SOH %, Raw data combined)  ▼ (Anomaly detected: Score < 30%)
+              [ WebSocket Broadcast Server ]              [ Downstream MQTT Publisher ]
+              (Broadcasts to Port 8080)                   Publishes "FAULT" to topic
+                        │                                 "ev/analytics/trust_status"
+                        │                                           │
+          ┌─────────────┼─────────────┐                             ▼
+          ▼             ▼             ▼                   [ QRB2210 Listener Daemon ]
+    [ 3D Twin UI ]  [ Database ]  [ LLM Cache ]           Subscribes and writes back down
+    React/Three.js  Local SQLite  Rolling 1K buffer       via Bridge.put("trust_status", "FAULT")
+    Visualizes      Analytics     Context window                    │
+    Heatmap cards   Logger            │                             ▼
+                                      ▼                   [ Zephyr TASK Thread 3 ]
+                              [ Offline LLM Engine ]      Reading "trust_status" every 500ms
+                              Llama-3-8B on NPU/GPU       Flashes warning exclamation (!)
+                              Renders diag advice         Physically on 8x13 LED Matrix
+                                      ▲
+                                      │ (WebSocket Query)
+                                      ┼─────────────────────────────┐
+                                                                    │
+    [ Companion Mobile App ] <──────────────────────────────────────┤ (Wi-Fi WebSocket)
+    ├── SoC% Circular Dial Gauge Display                            │
+    ├── Live alerts screen sounds pushes                            │
+    └── Local BLE Fallback Mode (Bluetooth 5.1 Link) <──────────────┘
+        Scans GATT descriptors directly from QRB2210 gateway if off-grid
+                                      │
+                                      ▼
+                       [ Qualcomm Cloud AI 100 ]
+                       ├── Fleet log daily summary summaries (HTTPS Ingress)
+                       ├── Fleet retraining pipeline
+                       └── OTA compilation via Qualcomm AI Hub CLI toolchain

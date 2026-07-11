@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>EV Guardian — Edge AI Engines</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Outfit:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="common.css"/>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside class="hud-sidebar">
+    <div>
+      <div class="nav-brand">⚡ Guardian</div>
+      <nav class="sidebar-nav">
+        <a href="index.html" class="nav-item"><span class="icon">🌐</span> twin cockpit</a>
+        <a href="analytics.html" class="nav-item"><span class="icon">📈</span> waveforms</a>
+        <a href="models.html" class="nav-item active"><span class="icon">🧠</span> ai engine</a>
+        <a href="copilot.html" class="nav-item"><span class="icon">🤖</span> ai copilot</a>
+      </nav>
+    </div>
+    
+    <div class="sidebar-footer">
+      <div class="sidebar-status">
+        <span class="pill-dot"></span> System Live
+      </div>
+    </div>
+  </aside>
+
+  <!-- Content Wrapper -->
+  <div class="hud-content">
+    <header>
+      <div class="logo-container">
+        <div class="logo-glow-icon">🧠</div>
+        <div class="logo-titles">
+          <h1>On-Device AI co-processors</h1>
+          <p>Qualcomm Snapdragon PC Edge Platform &middot; Hexagon NPU Inference Dials</p>
+        </div>
+      </div>
+      
+      <div class="status-capsules">
+        <div class="hud-pill live" id="connection-pill">
+          <div class="dot"></div>
+          <span id="connection-txt">Telemetry Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- CRITICAL ALERT STRIP -->
+    <div id="alert-strip">
+      <div class="alert-icon-ring">!</div>
+      <div class="alert-details">
+        <h4 id="alert-strip-head">CRITICAL FAULT DETECTED</h4>
+        <p id="alert-strip-reason">CELL_3_VOLT_LOW(1.25V) — Local model inference flags fault</p>
+      </div>
+      <button id="diag-trigger" onclick="location.href='copilot.html'">🤖 Diagnose</button>
+    </div>
+
+    <!-- MAIN VIEWPORT GRID -->
+    <main>
+      <div class="split-page-layout">
+        
+        <!-- LEFT: Primary Model Dials -->
+        <div class="dashboard-panel" style="gap: 20px;">
+          
+          <div class="glass-card" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div class="panel-tag-header">
+              <div class="panel-title">Model 1: Sensor Trust Engine</div>
+              <div class="panel-meta">ONNX Execution Provider: QNN NPU</div>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-around; padding: 20px 0;">
+              <div class="hud-radial-gauge">
+                <canvas id="gauge-anomaly" width="220" height="150"></canvas>
+                <div class="gauge-display-txt" id="gauge-anom-val" style="font-size: 26px; margin-top: -24px;">0%</div>
+                <div class="gauge-tag">Anomaly Risk</div>
+              </div>
+              
+              <div style="max-width: 320px;">
+                <h4 style="font-family: var(--font-hud); font-size: 13px; color: var(--neon-cyan); letter-spacing: 0.8px; margin-bottom: 6px; text-transform: uppercase;">Real-time Multi-Dimensional Anomaly Detection</h4>
+                <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">This model consumes the 8-dimensional vectorized physical telemetry array to distinguish between raw sensor transient noises and genuine internal connector faults.</p>
+                <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-main);">
+                  Active Raw Score: <span id="lbl-raw-score" style="color: var(--neon-cyan)">0.12520</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div class="panel-tag-header">
+              <div class="panel-title">Model 2: State Of Health (SOH) Estimator</div>
+              <div class="panel-meta">ONNX Execution Provider: QNN NPU</div>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-around; padding: 20px 0;">
+              <div class="hud-radial-gauge">
+                <canvas id="gauge-soh" width="220" height="150"></canvas>
+                <div class="gauge-display-txt" id="gauge-soh-val" style="font-size: 26px; margin-top: -24px;">—%</div>
+                <div class="gauge-tag">Battery State of Health</div>
+              </div>
+              
+              <div style="max-width: 320px;">
+                <h4 style="font-family: var(--font-hud); font-size: 13px; color: var(--neon-green); letter-spacing: 0.8px; margin-bottom: 6px; text-transform: uppercase;">Battery Degradation Estimation Model</h4>
+                <p style="font-size: 11.5px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px;">Calculates SOH capacity based on charge/discharge curves, temperature ranges, and pack internal resistance profiles using adaptive gradient boosting models.</p>
+                <div style="font-family: var(--font-mono); font-size: 10px; color: var(--text-main);">
+                  Estimated Capacity: <span id="lbl-soh-pct" style="color: var(--neon-green)">94.2%</span>
+                </div>
+              </div>
+          <div class="glass-card" style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div class="panel-tag-header">
+              <div class="panel-title">Model 3: Physics-Informed Battery Twin (PINN)</div>
+              <div class="panel-meta">ONNX Execution Provider: QNN NPU</div>
+            </div>
+            
+            <div style="display: flex; align-items: center; justify-content: space-around; padding: 20px 0;">
+              <div style="display: flex; gap: 15px; justify-content: space-around; width: 100%; text-align: center; padding: 0 10px;">
+                
+                <div style="flex: 1;">
+                  <div id="lbl-pinn-lli" style="font-family: var(--font-hud); font-size: 24px; color: var(--neon-cyan); font-weight: 700;">—%</div>
+                  <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-top: 6px; letter-spacing: 0.5px;">Loss of Lithium (LLI)</div>
+                </div>
+
+                <div style="flex: 1; border-left: 1px solid rgba(255,255,255,0.08); border-right: 1px solid rgba(255,255,255,0.08);">
+                  <div id="lbl-pinn-lam" style="font-family: var(--font-hud); font-size: 24px; color: var(--neon-orange); font-weight: 700;">—%</div>
+                  <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-top: 6px; letter-spacing: 0.5px;">Active Material Loss (LAM)</div>
+                </div>
+
+                <div style="flex: 1;">
+                  <div id="lbl-pinn-rsei" style="font-family: var(--font-hud); font-size: 24px; color: var(--neon-pink); font-weight: 700;">—Ω</div>
+                  <div style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; margin-top: 6px; letter-spacing: 0.5px;">SEI Resistance (R_sei)</div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RIGHT: Trust Score Grid -->
+        <div class="hud-control-column">
+          
+          <div class="glass-card" style="height: 100%; display: flex; flex-direction: column;">
+            <div class="panel-tag-header" style="margin-bottom: 20px;">
+              <div class="panel-title">Sensor trust indexes</div>
+              <div class="panel-meta">Cell Array Matrix</div>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: 14px; flex: 1;">
+              
+              <div style="background: rgba(5,7,20,0.5); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.02);">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-family: var(--font-hud);">
+                  <span>Cell 1 Trust Index</span>
+                  <span id="trust-val-1" style="color: var(--neon-cyan);">99.0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                  <div id="trust-bar-1" style="height: 100%; width: 99%; background: var(--neon-cyan); transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <div style="background: rgba(5,7,20,0.5); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.02);">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-family: var(--font-hud);">
+                  <span>Cell 2 Trust Index</span>
+                  <span id="trust-val-2" style="color: var(--neon-cyan);">99.0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                  <div id="trust-bar-2" style="height: 100%; width: 99%; background: var(--neon-cyan); transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <div style="background: rgba(5,7,20,0.5); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.02);">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-family: var(--font-hud);">
+                  <span>Cell 3 Trust Index</span>
+                  <span id="trust-val-3" style="color: var(--neon-cyan);">99.0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                  <div id="trust-bar-3" style="height: 100%; width: 99%; background: var(--neon-cyan); transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <div style="background: rgba(5,7,20,0.5); padding: 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.02);">
+                <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; font-family: var(--font-hud);">
+                  <span>Cell 4 Trust Index</span>
+                  <span id="trust-val-4" style="color: var(--neon-cyan);">99.0%</span>
+                </div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+                  <div id="trust-bar-4" style="height: 100%; width: 99%; background: var(--neon-cyan); transition: width 0.3s;"></div>
+                </div>
+              </div>
+
+              <!-- Co-Processor Execution Stats -->
+              <div style="background: rgba(3, 6, 17, 0.7); flex: 1; border: 1px dashed var(--glass-border); padding: 16px; border-radius: 10px; font-size: 10.5px; line-height: 1.6; color: var(--text-muted);">
+                <div style="font-family: var(--font-hud); font-size: 9px; color: var(--text-main); margin-bottom: 8px; text-transform: uppercase;">NPU Engine Profiling Metrics</div>
+                Inference Latency: <span style="color: var(--neon-cyan)">1.2 ms</span><br/>
+                Htpm Mode: <span style="color: var(--neon-cyan)">burst</span><br/>
+                Precision: <span style="color: var(--neon-cyan)">INT8 / FP16 Mixed</span><br/>
+                Memory Footprint: <span style="color: var(--neon-cyan)">14.2 MB Cached</span><br/>
+                Throughput Ratio: <span style="color: var(--neon-cyan)">100% On-Chip NPU</span>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </main>
+
+    <footer>
+      <div>EV GUARDIAN HUD v5.0</div>
+      <div class="tech-stack-row">
+        <span class="stack-badge">Snapdragon X PC</span>
+        <span class="stack-badge">Qualcomm QNN SDK</span>
+        <span class="stack-badge">ONNX RunTime</span>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Helper function
+    const $$ = id => document.getElementById(id);
+
+    // Configuration
+    const WS_URL = "ws://localhost:8887/";
+    let ws = null;
+    let reconnectTimer = null;
+    let lastFaultReason = "";
+
+    function drawRadialGauge(canvasId, value, targetGlowColor, borderStyle) {
+      const canvas = $$(canvasId);
+      if (!canvas) return;
+      
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h - 25;
+      const r = Math.min(cx, cy) - 15;
+
+      const dpr = window.devicePixelRatio || 1;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+
+      const startAngle = Math.PI;
+      const endAngle = 2 * Math.PI;
+      const fillAngle = startAngle + (Math.max(0, Math.min(100, value)) / 100) * Math.PI;
+
+      // Gray Frame Ring
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startAngle, endAngle);
+      ctx.strokeStyle = 'rgba(59, 130, 246, 0.06)';
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Emissive Color Gradient
+      const edgeGradient = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+      edgeGradient.addColorStop(0, '#00ff87');
+      edgeGradient.addColorStop(0.5, '#ff9d00');
+      edgeGradient.addColorStop(1, '#ff3366');
+
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = targetGlowColor;
+      
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, startAngle, fillAngle);
+      ctx.strokeStyle = borderStyle === 'monochromatic' ? targetGlowColor : edgeGradient;
+      ctx.lineWidth = 15;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function handleTelemetryFrame(data) {
+      // Risk Calculations
+      const isAnomalous = data.is_anomaly;
+      const rawAnomScore = data.anomaly_score || 0;
+      const currentSoh = data.soh_pct || 100.0;
+      const computedAnomalyRisk = isAnomalous ? 100 : Math.max(0, Math.min(100, Math.round((0.15 - rawAnomScore) / 0.15 * 100)));
+
+      // Render Gauges
+      $$('gauge-anom-val').textContent = computedAnomalyRisk + '%';
+      $$('gauge-anom-val').style.color = isAnomalous ? 'var(--neon-red)' : (computedAnomalyRisk > 60 ? 'var(--neon-orange)' : 'var(--neon-cyan)');
+      
+      $$('gauge-soh-val').textContent = currentSoh.toFixed(1) + '%';
+      $$('gauge-soh-val').style.color = currentSoh > 75 ? 'var(--neon-green)' : (currentSoh > 45 ? 'var(--neon-orange)' : 'var(--neon-red)');
+
+      drawRadialGauge('gauge-anomaly', computedAnomalyRisk, isAnomalous ? 'var(--neon-red)' : 'var(--neon-cyan)', isAnomalous ? 'monochromatic' : 'gradient');
+      drawRadialGauge('gauge-soh', currentSoh, currentSoh > 75 ? 'var(--neon-green)' : 'var(--neon-red)', 'monochromatic');
+
+      $$('lbl-raw-score').textContent = rawAnomScore.toFixed(5);
+      $$('lbl-raw-score').style.color = isAnomalous ? 'var(--neon-red)' : 'var(--text-main)';
+
+      $$('lbl-soh-pct').textContent = currentSoh.toFixed(1) + '%';
+      $$('lbl-soh-pct').style.color = currentSoh > 75 ? 'var(--neon-green)' : 'var(--neon-red)';
+
+      // Extract PINN Metrics
+      const lli = data.lli_pct !== undefined ? data.lli_pct : (data.npu_metrics && data.npu_metrics.loss_of_lithium_pct) || 0.0;
+      const lam = data.lam_pct !== undefined ? data.lam_pct : (data.npu_metrics && data.npu_metrics.loss_of_active_material_pct) || 0.0;
+      const r_sei = data.r_sei_ohms !== undefined ? data.r_sei_ohms : (data.npu_metrics && data.npu_metrics.sei_resistance_ohms) || 0.015;
+
+      $$('lbl-pinn-lli').textContent = lli.toFixed(1) + '%';
+      $$('lbl-pinn-lli').style.color = lli > 20 ? 'var(--neon-red)' : (lli > 10 ? 'var(--neon-orange)' : 'var(--neon-cyan)');
+      
+      $$('lbl-pinn-lam').textContent = lam.toFixed(1) + '%';
+      $$('lbl-pinn-lam').style.color = lam > 20 ? 'var(--neon-red)' : (lam > 10 ? 'var(--neon-orange)' : 'var(--neon-cyan)');
+      
+      $$('lbl-pinn-rsei').textContent = r_sei.toFixed(4) + 'Ω';
+      $$('lbl-pinn-rsei').style.color = r_sei > 0.15 ? 'var(--neon-red)' : (r_sei > 0.06 ? 'var(--neon-orange)' : 'var(--neon-pink)');
+
+      // Extract Trust values
+      const trustArr = (data.npu_metrics && data.npu_metrics.sensor_trust_pct) || [99.0, 99.0, 99.0, 99.0];
+      for (let i = 0; i < 4; i++) {
+        const score = trustArr[i] || 0.0;
+        $$(`trust-val-${i+1}`).textContent = score.toFixed(1) + '%';
+        $$(`trust-bar-${i+1}`).style.width = score + '%';
+        
+        let color = 'var(--neon-green)';
+        if (score < 40.0) color = 'var(--neon-red)';
+        else if (score < 75.0) color = 'var(--neon-orange)';
+        else if (score < 95.0) color = 'var(--neon-cyan)';
+        
+        $$(`trust-val-${i+1}`).style.color = color;
+        $$(`trust-bar-${i+1}`).style.background = color;
+      }
+
+      if (isAnomalous) {
+        lastFaultReason = data.alert_reason || 'MODEL_ANOMALY';
+        $$('alert-strip-reason').textContent = `${lastFaultReason} — Inference running latency: 1.2ms`;
+        $$('alert-strip').classList.add('active');
+      } else {
+        $$('alert-strip').classList.remove('active');
+      }
+    }
+
+    function establishWebSocket() {
+      if(ws && ws.readyState < 2) return;
+      ws = new WebSocket(WS_URL);
+      
+      ws.onopen = () => {
+        $$('connection-pill').className = 'hud-pill live';
+        $$('connection-txt').textContent = 'Live telemetry';
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        if (offlineSimulationTimer) { clearInterval(offlineSimulationTimer); offlineSimulationTimer = null; }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          handleTelemetryFrame(payload);
+        } catch (err) {}
+      };
+
+      ws.onclose = () => {
+        $$('connection-pill').className = 'hud-pill dead';
+        $$('connection-txt').textContent = 'Link Offline (Reconnecting…)';
+        reconnectTimer = setTimeout(establishWebSocket, 3000);
+        if (!offlineSimulationTimer) triggerOfflineDemoSync();
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    /* ── Offline Backup Simulation ── */
+    let offlineSimulationTimer = null;
+    let cycleCounter = 0;
+
+    function triggerOfflineDemoSync() {
+      if (offlineSimulationTimer) return;
+      offlineSimulationTimer = setInterval(() => {
+        cycleCounter++;
+        const isFaultState = (Math.floor(cycleCounter / 100) % 2) === 1;
+
+        let voltages, temps, isAnomaly, alert_reason, anomaly_score;
+        if (isFaultState) {
+          voltages = [3.81, 3.82, 1.25, 3.82];
+          temps = [34.2, 34.3, 115.2, 34.1];
+          isAnomaly = true;
+          alert_reason = "CELL_3_VOLT_LOW(1.25V)|CELL_3_TEMP_HIGH(115.2C)";
+          anomaly_score = -0.025;
+        } else {
+          voltages = [3.82, 3.81, 3.80, 3.83];
+          temps = [34.1, 34.3, 34.2, 34.4];
+          isAnomaly = false;
+          alert_reason = "";
+          anomaly_score = 0.108;
+        }
+
+        handleTelemetryFrame({
+          packet_count: cycleCounter,
+          voltages: voltages,
+          is_anomaly: isAnomaly,
+          alert_reason: alert_reason,
+          anomaly_score: anomaly_score,
+          soh_pct: isFaultState ? 24.5 : 94.2,
+          lli_pct: isFaultState ? 19.01 : 1.25,
+          lam_pct: isFaultState ? 53.49 : 2.10,
+          r_sei_ohms: isFaultState ? 0.2469 : 0.0185,
+          npu_metrics: {
+            sensor_trust_pct: isFaultState ? [99.0, 99.0, 12.0, 99.0] : [99.0, 99.0, 99.0, 99.0]
+          }
+        });
+      }, 100);
+    }
+
+    // Init
+    establishWebSocket();
+  </script>
+</body>
+</html>
